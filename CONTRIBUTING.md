@@ -134,4 +134,4 @@ em `0.x`, mudanças incompatíveis sobem a versão *minor*. Para publicar uma ve
 
 1. move as entradas de `[Não lançado]` para uma nova seção no `CHANGELOG.md`;
 2. atualiza `version` no `Cargo.toml` (e o `Cargo.lock`, com `cargo build`);
-3. cria a tag assinada `vX.Y.Z` e a envia. O workflow de release compila e publica os binários.
+3. cria a tag anotada `vX.Y.Z` (assinada, se houver chave configurada) e a envia. O workflow de release compila e publica os binários.
