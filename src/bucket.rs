@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Gabriel Vieira Soriano Aderaldo
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Bucket = um arquivo `*.enc.yaml` do cofre. Secret = uma linha `CHAVE: valor`
 // dentro dele.
 
@@ -28,7 +31,8 @@ impl Bucket {
         if BUCKET_EXTENSIONS.iter().any(|extension| input.ends_with(extension)) {
             return Ok(Bucket { file_name: input.into() });
         }
-        let looks_like_another_format = [".yaml", ".yml", ".json", ".env"].iter().any(|extension| input.ends_with(extension));
+        let looks_like_another_format =
+            [".yaml", ".yml", ".json", ".env"].iter().any(|extension| input.ends_with(extension));
         guard!(!looks_like_another_format, else: SboxError::MissingEncSuffix(input.into()));
         Ok(Bucket { file_name: format!("{input}.enc.yaml") })
     }
@@ -39,10 +43,7 @@ impl Bucket {
 
     /// O nome sem a extensão, como o usuário digita: `gitlab`.
     pub fn name(&self) -> &str {
-        BUCKET_EXTENSIONS
-            .iter()
-            .find_map(|extension| self.file_name.strip_suffix(extension))
-            .unwrap_or(&self.file_name)
+        BUCKET_EXTENSIONS.iter().find_map(|extension| self.file_name.strip_suffix(extension)).unwrap_or(&self.file_name)
     }
 
     pub fn is_hidden(&self) -> bool {

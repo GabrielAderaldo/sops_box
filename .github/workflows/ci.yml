@@ -1,0 +1,104 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  SOPS_VERSION: v3.13.3
+  AGE_VERSION: v1.3.2
+  # O age não publica checksums; este é o SHA-256 do pacote linux-amd64 da versão acima.
+  AGE_SHA256: cbe24006683f8eb669266162894b9a522a1af52f2665fbc63a4bb032ed26ac10
+
+jobs:
+  lint:
+    name: Formatação e clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # master
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets --locked -- -D warnings
+
+  msrv:
+    name: MSRV (1.88)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # master
+        with:
+          toolchain: "1.88"
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - run: cargo check --locked
+
+  test:
+    name: Testes de ponta a ponta
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # master
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+
+      - name: Instalar sops e age (com checksum conferido)
+        working-directory: ${{ runner.temp }}
+        run: |
+          base=https://github.com/getsops/sops/releases/download/$SOPS_VERSION
+          curl -fsSLO "$base/sops-$SOPS_VERSION.linux.amd64"
+          curl -fsSLO "$base/sops-$SOPS_VERSION.checksums.txt"
+          sha256sum -c --ignore-missing "sops-$SOPS_VERSION.checksums.txt"
+          sudo install -m755 "sops-$SOPS_VERSION.linux.amd64" /usr/local/bin/sops
+
+          curl -fsSL -o age.tar.gz "https://github.com/FiloSottile/age/releases/download/$AGE_VERSION/age-$AGE_VERSION-linux-amd64.tar.gz"
+          echo "$AGE_SHA256  age.tar.gz" | sha256sum -c
+          tar -xzf age.tar.gz
+          sudo install -m755 age/age age/age-keygen /usr/local/bin/
+          sops --version && age --version
+
+      - name: Criar cofre com chave age descartável
+        run: |
+          mkdir -p ~/.config/sops/age ~/secrets
+          age-keygen -o ~/.config/sops/age/keys.txt 2>/dev/null
+          printf 'creation_rules:\n  - path_regex: \\.enc\\.(yaml|yml|json|env)$\n    age: %s\n' \
+            "$(age-keygen -y ~/.config/sops/age/keys.txt)" > ~/secrets/.sops.yaml
+
+      - run: make test
+
+  dependencies:
+    name: Dependências (licenças e RustSec)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
+
+  reuse:
+    name: Licenças dos arquivos (REUSE)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: fsfe/reuse-action@676e2d560c9a403aa252096d99fcab3e1132b0f5 # v6.0.0

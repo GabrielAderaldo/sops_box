@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Gabriel Vieira Soriano Aderaldo
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // O binário `sops`. Todo comando roda com o diretório atual = cofre, porque o
 // sops procura o `.sops.yaml` subindo a partir do arquivo. Todo código de saída
 // é conferido: falha silenciosa aqui significa secret perdido.
@@ -44,7 +47,16 @@ impl Sops {
     /// do `.sops.yaml`.
     pub fn encrypt(&self, yaml: &str, bucket: &Bucket) -> Result<Vec<u8>> {
         let ciphertext = self.run(
-            ["encrypt", "--input-type", "yaml", "--output-type", "yaml", "--filename-override", &bucket.file_name, "/dev/stdin"],
+            [
+                "encrypt",
+                "--input-type",
+                "yaml",
+                "--output-type",
+                "yaml",
+                "--filename-override",
+                &bucket.file_name,
+                "/dev/stdin",
+            ],
             StandardInput::Data(yaml.as_bytes().to_vec()),
         )?;
         // Código 0 não basta: sem o bloco `sops:` a saída não é um bucket encriptado.

@@ -1,0 +1,32 @@
+name: 💡 Sugestão
+description: Uma ideia ou funcionalidade nova.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Qual problema isto resolve?
+      description: Conte o caso de uso real, não só a solução.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposta
+      description: Como você imagina o comando ou o comportamento? Exemplos de uso ajudam.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternativas consideradas
+      description: Dá para fazer hoje com `sops` direto ou combinando comandos do `sbox`?
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Confirmações
+      options:
+        - label: A proposta mantém as garantias de segurança descritas em docs/ARCHITECTURE.md.
+          required: true
+        - label: Posso ajudar a implementar.

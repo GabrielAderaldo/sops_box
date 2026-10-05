@@ -1,0 +1,18 @@
+name: ❓ Dúvida
+description: Dúvida de uso que o manual não respondeu.
+labels: [question]
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: Sua dúvida
+      description: O que você está tentando fazer e o que já tentou. Nunca cole segredos.
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Confirmações
+      options:
+        - label: Li o manual (docs/MANUAL.md), inclusive a seção de solução de problemas.
+          required: true

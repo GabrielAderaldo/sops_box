@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Gabriel Vieira Soriano Aderaldo
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Transforma `argv` num `Command` tipado. Depois daqui ninguém mais olha
 // string de flag: cada comando já chega com os campos que precisa.
 
@@ -134,7 +137,11 @@ impl Command {
                 } else {
                     SecretDestination::StandardOutput
                 };
-                Command::GetSecret { bucket: arguments.next_positional(), key: arguments.next_positional(), destination }
+                Command::GetSecret {
+                    bucket: arguments.next_positional(),
+                    key: arguments.next_positional(),
+                    destination,
+                }
             }
             "set" => {
                 arguments.validate("set", 2..=3, &[])?;
@@ -217,7 +224,12 @@ impl RawArguments {
     }
 
     /// Confere as flags aceitas e a quantidade de posicionais de um comando.
-    fn validate(&self, command: &'static str, positional_count: RangeInclusive<usize>, accepted_flags: &[&str]) -> Result<()> {
+    fn validate(
+        &self,
+        command: &'static str,
+        positional_count: RangeInclusive<usize>,
+        accepted_flags: &[&str],
+    ) -> Result<()> {
         let unexpected = self
             .unknown_flags
             .first()

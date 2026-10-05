@@ -2,9 +2,13 @@
 name = "sbox"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.88"
 description = "Interface de linha de comando para um cofre sops"
 license = "AGPL-3.0-or-later"
 repository = "https://github.com/GabrielAderaldo/sops_box"
+readme = "README.md"
+keywords = ["sops", "secrets", "age", "cli", "vault"]
+categories = ["command-line-utilities", "cryptography"]
 
 [dependencies]
 # Só bindings da libc, para desligar o eco do terminal (termios) no `set`.

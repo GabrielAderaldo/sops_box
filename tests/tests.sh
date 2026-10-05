@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Gabriel Vieira Soriano Aderaldo
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # Bateria funcional do sbox, de ponta a ponta (sops real, cofres temporários).
 # Uso: tests/tests.sh [binário] [outro-binário-para-interop]
 #      (padrão: target/release/sbox — rode `make test`)

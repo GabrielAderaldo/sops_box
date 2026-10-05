@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Gabriel Vieira Soriano Aderaldo
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Arquivos e diretórios, com os nomes do `FileManager` da Foundation.
 
 use std::fs::{self, OpenOptions};

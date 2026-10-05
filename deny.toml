@@ -1,0 +1,36 @@
+# Política de dependências, conferida pelo cargo-deny no CI.
+# https://embarkstudios.github.io/cargo-deny/
+
+[graph]
+targets = ["x86_64-unknown-linux-gnu", "x86_64-unknown-linux-musl", "aarch64-unknown-linux-gnu"]
+
+[advisories]
+# Qualquer aviso do RustSec (vulnerável, sem manutenção, retirado) falha o CI.
+unmaintained = "all"
+yanked = "deny"
+
+[licenses]
+# Só licenças compatíveis com a AGPL-3.0-or-later do projeto.
+allow = [
+  "AGPL-3.0-or-later",
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "ISC",
+  "MIT",
+  "MPL-2.0",
+  "Unicode-3.0",
+  "Zlib",
+]
+confidence-threshold = 0.9
+# A lista acima é a política, não um retrato das dependências atuais.
+unused-allowed-license = "allow"
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Gabriel Vieira Soriano Aderaldo
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Processos filhos com a cara do `Process` da Foundation: monta-se o
 // processo (executável, argumentos, entrada, saída) e depois roda.
 
@@ -87,18 +90,10 @@ impl Process {
     pub fn run_until_exit(self) -> Result<ProcessResult> {
         let executable = self.executable.clone();
         let child = self.launch()?;
-        let output = child
-            .wait_with_output()
-            .map_err(|reason| SboxError::LaunchFailed { program: executable, reason })?;
-        let termination_status = output
-            .status
-            .code()
-            .unwrap_or_else(|| 128 + output.status.signal().unwrap_or(0));
-        Ok(ProcessResult {
-            termination_status,
-            standard_output: output.stdout,
-            standard_error: output.stderr,
-        })
+        let output =
+            child.wait_with_output().map_err(|reason| SboxError::LaunchFailed { program: executable, reason })?;
+        let termination_status = output.status.code().unwrap_or_else(|| 128 + output.status.signal().unwrap_or(0));
+        Ok(ProcessResult { termination_status, standard_output: output.stdout, standard_error: output.stderr })
     }
 
     /// Roda e deixa o processo solto, sem esperar.

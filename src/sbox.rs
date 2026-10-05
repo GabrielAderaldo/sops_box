@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Gabriel Vieira Soriano Aderaldo
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // O que cada comando faz. `Sbox` junta o cofre, o sops e o diretório de onde
 // o usuário chamou — o contexto que todos os comandos compartilham.
 
@@ -260,9 +263,11 @@ fn ask_for_value(key: &str) -> Result<String> {
 /// Lê o stdin inteiro, tirando só o `\n` final que o `echo` acrescenta.
 fn read_value_from_standard_input() -> Result<String> {
     let mut bytes = Vec::new();
-    std::io::stdin()
-        .read_to_end(&mut bytes)
-        .map_err(|reason| SboxError::FileOperationFailed { action: "ler", path: "o stdin".into(), reason })?;
+    std::io::stdin().read_to_end(&mut bytes).map_err(|reason| SboxError::FileOperationFailed {
+        action: "ler",
+        path: "o stdin".into(),
+        reason,
+    })?;
     let mut value = String::from_utf8_lossy(&bytes).into_owned();
     if value.ends_with('\n') {
         value.pop();

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Gabriel Vieira Soriano Aderaldo
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // O cofre: um diretório com `.sops.yaml` e buckets `*.enc.yaml`.
 
 use crate::bucket::Bucket;

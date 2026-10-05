@@ -1,0 +1,8 @@
+# Licença dos arquivos que não têm cabeçalho próprio (https://reuse.software).
+version = 1
+
+[[annotations]]
+path = ["**"]
+precedence = "closest"
+SPDX-FileCopyrightText = "2026 Gabriel Vieira Soriano Aderaldo"
+SPDX-License-Identifier = "AGPL-3.0-or-later"

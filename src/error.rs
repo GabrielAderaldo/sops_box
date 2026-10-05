@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Gabriel Vieira Soriano Aderaldo
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Tudo que pode dar errado no sbox, cada caso com o seu nome — como um
 // `enum SboxError: Error` da Swift. A mensagem que o usuário vê fica no
 // `Display`, num lugar só.
@@ -87,11 +90,12 @@ impl fmt::Display for SboxError {
                 }
                 Ok(())
             }
-            SopsReturnedPlaintext => write!(
-                formatter,
-                "o sops terminou sem erro mas não devolveu um arquivo encriptado — nada foi gravado"
-            ),
-            InvalidJSON { reason, offset } => write!(formatter, "JSON inválido vindo do sops ({reason}, byte {offset})"),
+            SopsReturnedPlaintext => {
+                write!(formatter, "o sops terminou sem erro mas não devolveu um arquivo encriptado — nada foi gravado")
+            }
+            InvalidJSON { reason, offset } => {
+                write!(formatter, "JSON inválido vindo do sops ({reason}, byte {offset})")
+            }
             NestedValuesUnsupported => {
                 write!(formatter, "valores aninhados (mapas/listas) não são suportados — só CHAVE: valor")
             }

@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Gabriel Vieira Soriano Aderaldo
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // JSON mínimo — só o que trocamos com o sops: strings soltas na ida e um
 // objeto plano `{"CHAVE": "valor"}` na volta. Sem serde, para manter o
 // binário pequeno.

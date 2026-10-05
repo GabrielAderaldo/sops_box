@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Gabriel Vieira Soriano Aderaldo
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // O terminal: cores suaves na saída e perguntas pelo `/dev/tty`.
 
 use std::fs::{File, OpenOptions};
@@ -38,11 +41,7 @@ impl Style {
     }
 
     fn paint_for(self, stream: Stream, text: &str) -> String {
-        if stream.supports_color() {
-            format!("\x1b[38;2;{}m{text}\x1b[0m", self.rgb())
-        } else {
-            text.to_owned()
-        }
+        if stream.supports_color() { format!("\x1b[38;2;{}m{text}\x1b[0m", self.rgb()) } else { text.to_owned() }
     }
 }
 

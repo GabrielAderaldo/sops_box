@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Gabriel Vieira Soriano Aderaldo
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 // Área de transferência via wl-copy (Wayland) ou xclip (X11), com limpeza
 // automática — no espírito do `UIPasteboard.general`.
 

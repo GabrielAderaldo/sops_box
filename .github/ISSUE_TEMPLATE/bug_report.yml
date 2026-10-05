@@ -1,0 +1,62 @@
+name: 🐛 Bug
+description: Algo não funciona como o manual descreve.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Obrigado pelo relato! **Nunca cole valores de segredos, chaves age ou buckets decriptados.**
+        Se o problema for de segurança, use o [reporte privado](https://github.com/GabrielAderaldo/sops_box/security/advisories/new).
+  - type: textarea
+    id: what
+    attributes:
+      label: O que aconteceu
+      description: Descreva o problema e o que você esperava que acontecesse.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Como reproduzir
+      description: Comandos exatos, de preferência num cofre de teste.
+      placeholder: |
+        sbox new teste
+        echo -n 'abc' | sbox set teste K
+        sbox get teste K
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Saída
+      description: A saída completa, incluindo a mensagem de erro (com `NO_COLOR=1`).
+      render: text
+  - type: input
+    id: sbox-version
+    attributes:
+      label: Versão do sbox
+      placeholder: "saída de `sbox --version`"
+    validations:
+      required: true
+  - type: input
+    id: sops-version
+    attributes:
+      label: Versão do sops
+      placeholder: "saída de `sops --version`"
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Sistema
+      placeholder: "ex.: Ubuntu 24.04, Wayland"
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Confirmações
+      options:
+        - label: Procurei nas issues existentes e não encontrei este problema.
+          required: true
+        - label: Não incluí nenhum segredo, chave privada ou bucket decriptado.
+          required: true
