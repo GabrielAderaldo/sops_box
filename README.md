@@ -39,7 +39,7 @@ $ sbox run pessoal -- npm publish
 
 ## Instalação
 
-Requisitos: Linux, [sops](https://github.com/getsops/sops) no `PATH` e uma chave configurada
+Requisitos: Linux ou macOS, [sops](https://github.com/getsops/sops) no `PATH` e uma chave configurada
 para ele (ex.: [age](https://github.com/FiloSottile/age)). Para compilar: Rust ≥ 1.88.
 
 ```sh
@@ -122,3 +122,4 @@ copyright, no padrão [REUSE](https://reuse.software).
 | [`libc`](https://github.com/rust-lang/libc) | MIT OR Apache-2.0 | crate compilado no binário |
 | [`sops`](https://github.com/getsops/sops) | MPL-2.0 | executado como programa externo, não distribuído |
 | `wl-copy` / `xclip` | GPL-3.0 / MIT | executados como programas externos, não distribuídos |
+| `pbcopy` / `pbpaste` | parte do macOS | executados como programas externos, não distribuídos |

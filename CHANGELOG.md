@@ -7,6 +7,13 @@ adota o [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
+### Adicionado
+
+- Suporte a macOS: `get -c` usa `pbcopy`/`pbpaste` e a limpeza agendada usa `shasum -a 256`
+  ([#4](https://github.com/GabrielAderaldo/sops_box/issues/4)).
+- `tests/tests.sh` roda no macOS: clipboard via `pbcopy`, varredura de vazamento pelo `ps`
+  quando não há `/proc`, e o teste do limite de 128 KB por variável restrito ao Linux.
+
 ## [0.1.0] - 2026-10-05
 
 Primeira versão pública.

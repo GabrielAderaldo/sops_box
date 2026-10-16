@@ -50,11 +50,11 @@ precisar da chave privada.
 
 | requisito | para quê | observação |
 |---|---|---|
-| Linux | sistema suportado | usa `/dev/tty`, `termios` e `hard_link` |
+| Linux ou macOS | sistemas suportados | usa `/dev/tty`, `termios` e `hard_link`. O CI roda em Linux; o macOS é testado localmente e só tem instalação pela fonte |
 | [sops](https://github.com/getsops/sops) | toda a criptografia | precisa dos subcomandos `decrypt`, `encrypt`, `set --value-stdin`, `unset` e `edit`. Testado com o 3.13.3 |
 | uma chave (ex.: [age](https://github.com/FiloSottile/age)) | o sops decriptar | o sops procura em `~/.config/sops/age/keys.txt` ou `SOPS_AGE_KEY_FILE` |
-| `wl-copy`/`wl-paste` (Wayland) ou `xclip` (X11) | só para `get -c` | escolhido pela presença de `WAYLAND_DISPLAY` |
-| `sh` e `sha256sum` | limpeza automática do clipboard | presentes em qualquer distribuição comum |
+| `wl-copy`/`wl-paste` (Wayland), `xclip` (X11) ou `pbcopy`/`pbpaste` (macOS) | só para `get -c` | no Linux, escolhido pela presença de `WAYLAND_DISPLAY`; no macOS, já vêm com o sistema |
+| `sh` e `sha256sum` (`shasum` no macOS) | limpeza automática do clipboard | presentes em qualquer distribuição comum e no macOS |
 | Rust ≥ 1.88 | só para compilar | via [rustup](https://rustup.rs) |
 
 ## 3. Instalação
@@ -301,7 +301,7 @@ $ sbox get pessoal GITHUB_TOKEN -c
   - Depois de 45 segundos, limpa a área de transferência, **mas só se o conteúdo ainda for
     o mesmo**. Se você copiou outra coisa nesse meio-tempo, ela não é apagada.
   - `--clear <seg>` muda o tempo. `--clear 0` desliga a limpeza.
-  - O valor é passado ao `wl-copy`/`xclip` pelo stdin, nunca como argumento, então não
+  - O valor é passado ao `wl-copy`/`xclip`/`pbcopy` pelo stdin, nunca como argumento, então não
     aparece no `ps`.
 - Falha se a chave não existir.
 
@@ -382,7 +382,7 @@ $ sbox run pessoal -- sh -c 'curl -H "Authorization: Bearer $GITHUB_TOKEN" https
 | `SOPS_BOX_DIR` | diretório do cofre (perde para `--dir`) | `~/secrets` |
 | `SOPS_BIN` | binário do sops a usar | `sops` do `PATH` |
 | `NO_COLOR` | qualquer valor desliga as cores ([no-color.org](https://no-color.org)) | cores ligadas em terminal |
-| `WAYLAND_DISPLAY` | presente → `wl-copy`; ausente → `xclip` | definido pela sessão gráfica |
+| `WAYLAND_DISPLAY` | presente → `wl-copy`; ausente → `xclip` (só no Linux; o macOS sempre usa `pbcopy`) | definido pela sessão gráfica |
 | `EDITOR` | editor do `sbox edit` (lido pelo sops) | o padrão do sops |
 | `SOPS_AGE_KEY_FILE` e afins | onde o sops procura a chave | ver a documentação do sops |
 
@@ -469,6 +469,9 @@ sbox show pessoal                # quais chaves existem (sem decriptar)
 - Só buckets **YAML** (`.enc.yaml` / `.enc.yml`).
 - `mv` usa `link()` + `unlink()`, então origem e destino precisam estar no mesmo sistema de
   arquivos. Dentro de um cofre, sempre estão.
-- Área de transferência só via `wl-copy` (Wayland) ou `xclip` (X11). macOS (`pbcopy`) e
-  terminais remotos (OSC 52) ainda não são suportados.
-- Suporte oficial apenas a Linux.
+- Área de transferência só via `wl-copy` (Wayland), `xclip` (X11) ou `pbcopy` (macOS).
+  Terminais remotos (OSC 52) ainda não são suportados.
+- No macOS, o `pbcopy` não marca o conteúdo como sensível, então gerenciadores de histórico
+  de clipboard (Maccy, Raycast, Alfred) podem guardar o valor mesmo depois da limpeza.
+- Sistemas suportados: Linux e macOS. Não há suporte a Windows, e os binários prontos são só
+  para Linux.
