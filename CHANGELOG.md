@@ -7,6 +7,14 @@ adota o [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
+### Mudado
+
+- No macOS, `get -c` escreve direto no `NSPasteboard` em vez de chamar o `pbcopy`, e marca o
+  conteúdo com `org.nspasteboard.ConcealedType` (mais `TransientType` quando há limpeza
+  agendada). Gerenciadores de histórico como Maccy, Raycast, Alfred e Paste deixam de guardar
+  o segredo. Sem crate nova: FFI direto com o runtime do Objective-C, e o AppKit só é
+  carregado no `get -c` ([#9](https://github.com/GabrielAderaldo/sops_box/issues/9)).
+
 ## [0.2.0] - 2026-10-16
 
 ### Adicionado

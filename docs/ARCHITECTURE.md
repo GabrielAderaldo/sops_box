@@ -30,7 +30,10 @@ recomendada antes de contribuir (veja também o [CONTRIBUTING](../CONTRIBUTING.m
                process.rs + json.rs
 ```
 
-O binário é **um único crate**, sem bibliotecas além da `libc`. Todo o resto (parser de
+O binário é **um único crate**, sem bibliotecas além da `libc`. No macOS, ele também usa o
+runtime do Objective-C (`libobjc`) e o AppKit, que fazem parte do sistema: o AppKit é carregado
+com `dlopen` só no `get -c`, e as mensagens são enviadas por `objc_msgSend`, sem crate de
+bindings (`appkit.rs`). Todo o resto (parser de
 argumentos, JSON, cores, processos) é escrito à mão para manter o binário pequeno, a
 superfície de dependências mínima e o código auditável de ponta a ponta. Para um programa
 que manipula segredos, cada dependência a menos é uma cadeia de suprimentos a menos.
@@ -48,7 +51,8 @@ que manipula segredos, cada dependência a menos é uma cadeia de suprimentos a 
 | `json.rs` | `JSONEncoder`/`JSONDecoder` mínimos: strings na ida, objeto plano `{"K": "v"}` na volta |
 | `process.rs` | `Process` (builder de processo filho), `ProcessResult`, `ProcessInfo` |
 | `file_manager.rs` | `FileManager`: arquivos e diretórios, sem nunca sobrescrever |
-| `pasteboard.rs` | `Pasteboard::general()`: `wl-copy`/`xclip`/`pbcopy` com limpeza agendada |
+| `pasteboard.rs` | `Pasteboard::general()`: `wl-copy`/`xclip`/`NSPasteboard` com limpeza agendada |
+| `appkit.rs` | `GeneralPasteboard`: escreve no `NSPasteboard` com as marcas `ConcealedType`/`TransientType` (só macOS; FFI direto com o runtime do Objective-C) |
 | `dialog.rs` | `Dialog::available()`: pergunta escondida numa janela (`osascript`/`zenity`/`kdialog`), para o `set --dialog` |
 | `console.rs` | cores, mensagens no stderr, pergunta escondida e s/N pelo `/dev/tty` |
 | `error.rs` | `enum SboxError` com **todas** as mensagens num lugar só, e a macro `guard!` |
@@ -140,7 +144,8 @@ cofres temporários (fora de `~/secrets`) e roda o `sops` de verdade. Ela cobre:
   pontas, coisas que parecem JSON, YAML ou `ENC[…]`);
 - falhas do sops simuladas com `SOPS_BIN=false`, `SOPS_BIN=true` e um sops falso que
   devolve JSON arbitrário;
-- clipboard, no macOS (`pbcopy`) ou quando há sessão gráfica e `xclip`;
+- clipboard, no macOS (incluindo as marcas do nspasteboard.org, lidas via JXA) ou quando há
+  sessão gráfica e `xclip`;
 - interoperabilidade com outro binário, se passado como segundo argumento.
 
 No CI, a suíte roda com uma chave age descartável, gerada a cada execução

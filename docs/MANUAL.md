@@ -53,7 +53,7 @@ precisar da chave privada.
 | Linux ou macOS | sistemas suportados | usa `/dev/tty`, `termios` e `hard_link`. O CI roda em Linux; o macOS é testado localmente e só tem instalação pela fonte |
 | [sops](https://github.com/getsops/sops) | toda a criptografia | precisa dos subcomandos `decrypt`, `encrypt`, `set --value-stdin`, `unset` e `edit`. Testado com o 3.13.3 |
 | uma chave (ex.: [age](https://github.com/FiloSottile/age)) | o sops decriptar | o sops procura em `~/.config/sops/age/keys.txt` ou `SOPS_AGE_KEY_FILE` |
-| `wl-copy`/`wl-paste` (Wayland), `xclip` (X11) ou `pbcopy`/`pbpaste` (macOS) | só para `get -c` | no Linux, escolhido pela presença de `WAYLAND_DISPLAY`; no macOS, já vêm com o sistema |
+| `wl-copy`/`wl-paste` (Wayland), `xclip` (X11) ou `NSPasteboard` + `pbpaste`/`pbcopy` (macOS) | só para `get -c` | no Linux, escolhido pela presença de `WAYLAND_DISPLAY`; no macOS, tudo vem com o sistema (`pbpaste`/`pbcopy` só na limpeza) |
 | `sh` e `sha256sum` (`shasum` no macOS) | limpeza automática do clipboard | presentes em qualquer distribuição comum e no macOS |
 | Rust ≥ 1.88 | só para compilar | via [rustup](https://rustup.rs) |
 
@@ -301,8 +301,13 @@ $ sbox get pessoal GITHUB_TOKEN -c
   - Depois de 45 segundos, limpa a área de transferência, **mas só se o conteúdo ainda for
     o mesmo**. Se você copiou outra coisa nesse meio-tempo, ela não é apagada.
   - `--clear <seg>` muda o tempo. `--clear 0` desliga a limpeza.
-  - O valor é passado ao `wl-copy`/`xclip`/`pbcopy` pelo stdin, nunca como argumento, então não
-    aparece no `ps`.
+  - No Linux, o valor é passado ao `wl-copy`/`xclip` pelo stdin, nunca como argumento, então
+    não aparece no `ps`. No macOS, o `sbox` escreve direto no `NSPasteboard`, sem processo
+    intermediário.
+  - No macOS, o conteúdo vai marcado com `org.nspasteboard.ConcealedType` (e
+    `TransientType`, quando há limpeza agendada). Gerenciadores de histórico que seguem o
+    [nspasteboard.org](http://nspasteboard.org), como Maccy, Raycast, Alfred e Paste, não
+    guardam o valor.
 - Falha se a chave não existir.
 
 ### `sbox set <bucket> <CHAVE> [valor | --dialog]`
@@ -412,7 +417,7 @@ $ sbox run pessoal -- sh -c 'curl -H "Authorization: Bearer $GITHUB_TOKEN" https
 | `SOPS_BOX_DIR` | diretório do cofre (perde para `--dir`) | `~/secrets` |
 | `SOPS_BIN` | binário do sops a usar | `sops` do `PATH` |
 | `NO_COLOR` | qualquer valor desliga as cores ([no-color.org](https://no-color.org)) | cores ligadas em terminal |
-| `WAYLAND_DISPLAY` | presente → `wl-copy`; ausente → `xclip` (só no Linux; o macOS sempre usa `pbcopy`) | definido pela sessão gráfica |
+| `WAYLAND_DISPLAY` | presente → `wl-copy`; ausente → `xclip` (só no Linux; o macOS sempre usa o `NSPasteboard`) | definido pela sessão gráfica |
 | `EDITOR` | editor do `sbox edit` (lido pelo sops) | o padrão do sops |
 | `SOPS_AGE_KEY_FILE` e afins | onde o sops procura a chave | ver a documentação do sops |
 
@@ -502,9 +507,10 @@ sbox show pessoal                # quais chaves existem (sem decriptar)
 - Só buckets **YAML** (`.enc.yaml` / `.enc.yml`).
 - `mv` usa `link()` + `unlink()`, então origem e destino precisam estar no mesmo sistema de
   arquivos. Dentro de um cofre, sempre estão.
-- Área de transferência só via `wl-copy` (Wayland), `xclip` (X11) ou `pbcopy` (macOS).
+- Área de transferência só via `wl-copy` (Wayland), `xclip` (X11) ou `NSPasteboard` (macOS).
   Terminais remotos (OSC 52) ainda não são suportados.
-- No macOS, o `pbcopy` não marca o conteúdo como sensível, então gerenciadores de histórico
-  de clipboard (Maccy, Raycast, Alfred) podem guardar o valor mesmo depois da limpeza.
+- No Linux, o conteúdo não é marcado como sensível, então gerenciadores de histórico de
+  clipboard (Klipper, CopyQ, GPaste) podem guardar o valor mesmo depois da limpeza. No macOS,
+  a marca existe, mas só funciona com gerenciadores que a respeitam.
 - Sistemas suportados: Linux e macOS. Não há suporte a Windows, e os binários prontos são só
   para Linux.

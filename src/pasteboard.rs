@@ -1,11 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Gabriel Vieira Soriano Aderaldo
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-// Área de transferência via wl-copy (Wayland), xclip (X11) ou pbcopy (macOS),
-// com limpeza automática — no espírito do `UIPasteboard.general`.
+// Área de transferência via wl-copy (Wayland), xclip (X11) ou NSPasteboard
+// (macOS), com limpeza automática — no espírito do `UIPasteboard.general`.
 
 use std::time::Duration;
 
+use crate::appkit::GeneralPasteboard;
 use crate::error::{Result, SboxError};
 use crate::process::{Process, ProcessInfo, StandardInput, StandardOutput};
 
@@ -31,16 +32,12 @@ impl Pasteboard {
     /// Copia `text` e, se `clearing_after` for dado, limpa depois desse tempo —
     /// mas só se o que estiver lá ainda for o mesmo texto.
     pub fn copy(&self, text: &str, clearing_after: Option<Duration>) -> Result<()> {
-        let (tool, arguments) = self.copy_command();
-        // Saída descartada: o wl-copy/xclip deixa um filho vivo servindo a área de
-        // transferência, e ele não pode herdar nossos pipes (a leitura nunca terminaria).
-        // O pbcopy entrega ao pasteboard do sistema e termina; descartar não o afeta.
-        let result = Process::new(tool)
-            .arguments(arguments)
-            .standard_input(StandardInput::Data(text.as_bytes().to_vec()))
-            .standard_output(StandardOutput::Discarded)
-            .run_until_exit()?;
-        guard!(result.succeeded(), else: SboxError::ClipboardFailed { tool, status: result.termination_status });
+        match self {
+            // Nativo, para marcar o conteúdo como sensível: o pbcopy não sabe fazer isso,
+            // e sem a marca os gerenciadores de histórico guardariam o segredo.
+            Pasteboard::MacOs => GeneralPasteboard::write_concealed(text, clearing_after.is_some())?,
+            Pasteboard::Wayland | Pasteboard::X11 => self.copy_with_tool(text)?,
+        }
 
         match clearing_after {
             Some(delay) => self.schedule_clearing(text, delay),
@@ -71,11 +68,20 @@ impl Pasteboard {
             .run_detached()
     }
 
-    fn copy_command(&self) -> (&'static str, &'static [&'static str]) {
-        match self {
+    fn copy_with_tool(&self, text: &str) -> Result<()> {
+        let (tool, arguments): (&'static str, &[&str]) = match self {
             Pasteboard::Wayland => ("wl-copy", &[]),
             Pasteboard::X11 => ("xclip", &["-selection", "clipboard", "-i"]),
-            Pasteboard::MacOs => ("pbcopy", &[]),
-        }
+            Pasteboard::MacOs => unreachable!("o macOS escreve pelo NSPasteboard"),
+        };
+        // Saída descartada: o wl-copy/xclip deixa um filho vivo servindo a área de
+        // transferência, e ele não pode herdar nossos pipes (a leitura nunca terminaria).
+        let result = Process::new(tool)
+            .arguments(arguments)
+            .standard_input(StandardInput::Data(text.as_bytes().to_vec()))
+            .standard_output(StandardOutput::Discarded)
+            .run_until_exit()?;
+        guard!(result.succeeded(), else: SboxError::ClipboardFailed { tool, status: result.termination_status });
+        Ok(())
     }
 }
