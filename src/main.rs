@@ -9,6 +9,7 @@
 #[macro_use]
 mod error;
 
+mod appkit;
 mod bucket;
 mod command_line;
 mod console;

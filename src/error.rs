@@ -49,6 +49,7 @@ pub enum SboxError {
     // Sistema
     LaunchFailed { program: String, reason: io::Error },
     ClipboardFailed { tool: &'static str, status: i32 },
+    PasteboardFailed,
     DialogFailed { tool: &'static str, status: i32, standard_error: String },
     FileAlreadyExists { path: String },
     FileOperationFailed { action: &'static str, path: String, reason: io::Error },
@@ -116,6 +117,10 @@ impl fmt::Display for SboxError {
 
             LaunchFailed { program, reason } => write!(formatter, "não consegui executar `{program}`: {reason}"),
             ClipboardFailed { tool, status } => write!(formatter, "{tool} falhou (código {status})"),
+            PasteboardFailed => write!(
+                formatter,
+                "não consegui escrever na área de transferência do macOS (NSPasteboard) — sem sessão gráfica?"
+            ),
             DialogFailed { tool, status, standard_error } => {
                 write!(formatter, "{tool} falhou (código {status})")?;
                 if !standard_error.is_empty() {

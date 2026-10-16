@@ -226,11 +226,22 @@ if [ -n "$CLIP" ]; then
     echo "Clipboard ($CLIP)"
     s get pessoal TOKEN -c --clear 1 2>/dev/null
     eq  "copia para o clipboard" "tok-123" "$(paste_clip)"
+    if [ "$CLIP" = macos ]; then
+        # As marcas do nspasteboard.org que os gerenciadores de histórico respeitam.
+        types=$(osascript -l JavaScript -e 'ObjC.import("AppKit"); $.NSPasteboard.generalPasteboard.types.js.map(t => t.js).join(" ")' 2>/dev/null)
+        has "marca o conteúdo como sensível (ConcealedType)" "org.nspasteboard.ConcealedType" "$types"
+        has "com limpeza agendada, marca como transitório" "org.nspasteboard.TransientType" "$types"
+    fi
     sleep 1.6
     eq  "limpa depois do tempo" "" "$(paste_clip)"
     s get pessoal TOKEN -c --clear 1 2>/dev/null; printf 'outra coisa' | copy_clip
     sleep 1.6
     eq  "não apaga o que você copiou depois" "outra coisa" "$(paste_clip)"
+    if [ "$CLIP" = macos ]; then
+        s get pessoal TOKEN -c --clear 0 2>/dev/null
+        types=$(osascript -l JavaScript -e 'ObjC.import("AppKit"); $.NSPasteboard.generalPasteboard.types.js.map(t => t.js).join(" ")' 2>/dev/null)
+        result "sem limpeza (--clear 0), não marca como transitório" $([[ "$types" == *ConcealedType* && "$types" != *TransientType* ]]; echo $?)
+    fi
     printf '' | copy_clip
 fi
 
