@@ -179,7 +179,8 @@ SOPS_BIN=true "$BIN" new vazio >/dev/null 2>&1
 result "sops com exit 0 mas saída vazia não cria bucket" $([ ! -e "$V/vazio.enc.yaml" ]; echo $?)
 result "nenhum temporário largado no cofre" $(ls -A "$V" | grep -q sbox-tmp; [ $? != 0 ]; echo $?)
 ok  "--help" s --help
-eq  "--version" "sbox 0.1.0" "$(s --version)"
+VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' "$(dirname "$0")/../Cargo.toml" | head -1)
+eq  "--version bate com o Cargo.toml" "sbox $VERSION" "$(s --version)"
 
 echo "Parser JSON (sops falso, isola o código do sbox)"
 FAKE=$ROOT/fake-sops; printf '#!/bin/sh\nexec cat "$FAKE_JSON"\n' > "$FAKE"; chmod +x "$FAKE"

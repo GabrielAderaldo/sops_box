@@ -7,6 +7,8 @@ adota o [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
+## [0.2.0] - 2026-10-16
+
 ### Adicionado
 
 - Suporte a macOS: `get -c` usa `pbcopy`/`pbpaste` e a limpeza agendada usa `shasum -a 256`
@@ -42,5 +44,6 @@ Primeira versão pública.
   real, auditoria de dependências e checagem REUSE.
 - Workflow de release que publica binários Linux x86_64 com checksum SHA-256.
 
-[Não lançado]: https://github.com/GabrielAderaldo/sops_box/compare/v0.1.0...HEAD
+[Não lançado]: https://github.com/GabrielAderaldo/sops_box/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/GabrielAderaldo/sops_box/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/GabrielAderaldo/sops_box/releases/tag/v0.1.0
