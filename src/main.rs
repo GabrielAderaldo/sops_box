@@ -12,6 +12,7 @@ mod error;
 mod bucket;
 mod command_line;
 mod console;
+mod dialog;
 mod file_manager;
 mod json;
 mod pasteboard;

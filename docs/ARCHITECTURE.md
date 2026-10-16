@@ -49,6 +49,7 @@ que manipula segredos, cada dependência a menos é uma cadeia de suprimentos a 
 | `process.rs` | `Process` (builder de processo filho), `ProcessResult`, `ProcessInfo` |
 | `file_manager.rs` | `FileManager`: arquivos e diretórios, sem nunca sobrescrever |
 | `pasteboard.rs` | `Pasteboard::general()`: `wl-copy`/`xclip`/`pbcopy` com limpeza agendada |
+| `dialog.rs` | `Dialog::available()`: pergunta escondida numa janela (`osascript`/`zenity`/`kdialog`), para o `set --dialog` |
 | `console.rs` | cores, mensagens no stderr, pergunta escondida e s/N pelo `/dev/tty` |
 | `error.rs` | `enum SboxError` com **todas** as mensagens num lugar só, e a macro `guard!` |
 
@@ -75,8 +76,10 @@ mudanças nessas áreas pedem teste em `tests/tests.sh`.
 ### Segredos
 
 1. **Valor nunca na linha de comando de outro processo.** O `set` usa
-   `sops set --value-stdin`, e o clipboard recebe o valor pelo stdin. Nada que um `ps`
-   mostre contém segredo.
+   `sops set --value-stdin`, e o clipboard recebe o valor pelo stdin. A janela do
+   `set --dialog` devolve o valor pelo stdout, num pipe; os argumentos dela levam só o
+   bucket e a chave (no `osascript`, como `argv` do script, nunca interpolados no
+   AppleScript). Nada que um `ps` mostre contém segredo.
 2. **Texto puro nunca no disco.** O `new` encripta o YAML inicial em memória
    (`sops encrypt … /dev/stdin` com `--filename-override` para casar com o `path_regex`) e
    só grava o ciphertext.
