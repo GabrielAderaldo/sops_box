@@ -48,7 +48,7 @@ que manipula segredos, cada dependência a menos é uma cadeia de suprimentos a 
 | `json.rs` | `JSONEncoder`/`JSONDecoder` mínimos: strings na ida, objeto plano `{"K": "v"}` na volta |
 | `process.rs` | `Process` (builder de processo filho), `ProcessResult`, `ProcessInfo` |
 | `file_manager.rs` | `FileManager`: arquivos e diretórios, sem nunca sobrescrever |
-| `pasteboard.rs` | `Pasteboard::general()`: `wl-copy`/`xclip` com limpeza agendada |
+| `pasteboard.rs` | `Pasteboard::general()`: `wl-copy`/`xclip`/`pbcopy` com limpeza agendada |
 | `console.rs` | cores, mensagens no stderr, pergunta escondida e s/N pelo `/dev/tty` |
 | `error.rs` | `enum SboxError` com **todas** as mensagens num lugar só, e a macro `guard!` |
 
@@ -137,7 +137,7 @@ cofres temporários (fora de `~/secrets`) e roda o `sops` de verdade. Ela cobre:
   pontas, coisas que parecem JSON, YAML ou `ENC[…]`);
 - falhas do sops simuladas com `SOPS_BIN=false`, `SOPS_BIN=true` e um sops falso que
   devolve JSON arbitrário;
-- clipboard, quando há sessão gráfica e `xclip`;
+- clipboard, no macOS (`pbcopy`) ou quando há sessão gráfica e `xclip`;
 - interoperabilidade com outro binário, se passado como segundo argumento.
 
 No CI, a suíte roda com uma chave age descartável, gerada a cada execução

@@ -111,7 +111,10 @@ eq  "run mantém o diretório de quem chamou" "$PWD" "$(s run envs -- pwd)"
 s run envs -- sh -c 'exit 7'
 eq  "run propaga exit code" "7" "$?"
 ko  "run sem comando falha" s run envs
-has "run com valor > 128 KB dá erro claro" "Argument list too long" "$(s run pessoal -- true 2>&1)"
+# Limite por variável é do kernel Linux; o macOS só limita o total (ARG_MAX, ~1 MB).
+if [ "$(uname)" = Linux ]; then
+    has "run com valor > 128 KB dá erro claro" "Argument list too long" "$(s run pessoal -- true 2>&1)"
+fi
 ko  "run com comando inexistente falha" s run envs -- /nao/existe
 
 echo "Texto puro"
@@ -158,24 +161,41 @@ eq  "whitespace e ordem" "b" "$(fj $'{\n\t"A" : "a" ,\n "K":"b"\n}' K)"
 
 echo "Segurança"
 LEAK=$ROOT/leak; : > "$LEAK"
-( for _ in $(seq 1 300); do grep -l 'SEGREDO-CANARIO' /proc/[0-9]*/cmdline 2>/dev/null >> "$LEAK"; sleep 0.005; done ) &
+# Sem /proc (macOS), o `ps` mostra as mesmas linhas de comando.
+if [ -d /proc/self ]; then
+    scan_cmdlines() { grep -l 'SEGREDO-CANARIO' /proc/[0-9]*/cmdline 2>/dev/null; }
+else
+    scan_cmdlines() { ps -axww -o args= 2>/dev/null | grep 'SEGREDO-CANARIO' | grep -v grep; }
+fi
+( for _ in $(seq 1 300); do scan_cmdlines >> "$LEAK"; sleep 0.005; done ) &
 W=$!
 for _ in 1 2 3; do printf 'SEGREDO-CANARIO' | s set pessoal CANARIO 2>/dev/null; done
 wait $W
-eq  "valor nunca aparece em /proc/*/cmdline" "0" "$(sort -u "$LEAK" | grep -vc "^$" )"
+eq  "valor nunca aparece na linha de comando de um processo" "0" "$(sort -u "$LEAK" | grep -vc "^$" )"
 result "plaintext do valor não está no arquivo" $(! grep -q 'SEGREDO-CANARIO' "$V/pessoal.enc.yaml"; echo $?)
 result "nenhum arquivo em texto puro criado no cofre" $(for f in "$V"/*; do case $f in *.enc.yaml) grep -q '^sops:' "$f" || echo "$f";; esac; done | grep -qv plano; [ $? != 0 ]; echo $?)
 
-if [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ] && command -v xclip >/dev/null; then
-    echo "Clipboard"
+CLIP=
+if [ "$(uname)" = Darwin ]; then
+    CLIP=macos
+    paste_clip() { pbpaste 2>/dev/null; }
+    copy_clip()  { pbcopy >/dev/null 2>&1; }
+elif [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ] && command -v xclip >/dev/null; then
+    CLIP=x11
+    paste_clip() { xclip -selection clipboard -o 2>/dev/null; }
+    copy_clip()  { xclip -selection clipboard -i >/dev/null 2>&1; }
+fi
+
+if [ -n "$CLIP" ]; then
+    echo "Clipboard ($CLIP)"
     s get pessoal TOKEN -c --clear 1 2>/dev/null
-    eq  "copia para o clipboard" "tok-123" "$(xclip -selection clipboard -o 2>/dev/null)"
+    eq  "copia para o clipboard" "tok-123" "$(paste_clip)"
     sleep 1.6
-    eq  "limpa depois do tempo" "" "$(xclip -selection clipboard -o 2>/dev/null)"
-    s get pessoal TOKEN -c --clear 1 2>/dev/null; printf 'outra coisa' | xclip -selection clipboard -i >/dev/null 2>&1
+    eq  "limpa depois do tempo" "" "$(paste_clip)"
+    s get pessoal TOKEN -c --clear 1 2>/dev/null; printf 'outra coisa' | copy_clip
     sleep 1.6
-    eq  "não apaga o que você copiou depois" "outra coisa" "$(xclip -selection clipboard -o 2>/dev/null)"
-    printf '' | xclip -selection clipboard -i >/dev/null 2>&1
+    eq  "não apaga o que você copiou depois" "outra coisa" "$(paste_clip)"
+    printf '' | copy_clip
 fi
 
 if [ -n "$OTHER" ]; then
