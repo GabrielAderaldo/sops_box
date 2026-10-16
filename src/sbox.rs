@@ -8,8 +8,9 @@ use std::io::{Read, Write};
 use std::os::unix::process::CommandExt;
 
 use crate::bucket::{Bucket, Secret};
-use crate::command_line::{Command, SecretDestination};
+use crate::command_line::{Command, SecretDestination, ValueSource};
 use crate::console::{Console, Style};
+use crate::dialog::Dialog;
 use crate::error::{Result, SboxError};
 use crate::file_manager::FileManager;
 use crate::pasteboard::Pasteboard;
@@ -46,7 +47,7 @@ impl Sbox {
 
             Command::ShowSecrets { bucket, reveal_values } => self.show_secrets(&bucket, reveal_values),
             Command::GetSecret { bucket, key, destination } => self.get_secret(&bucket, &key, destination),
-            Command::SetSecret { bucket, key, value } => self.set_secret(&bucket, key, value),
+            Command::SetSecret { bucket, key, source } => self.set_secret(&bucket, key, source),
             Command::RemoveSecret { bucket, key, skip_confirmation } => {
                 self.remove_secret(&bucket, &key, skip_confirmation)
             }
@@ -186,15 +187,16 @@ impl Sbox {
         Ok(())
     }
 
-    fn set_secret(&self, name: &str, key: String, value: Option<String>) -> Result<()> {
+    fn set_secret(&self, name: &str, key: String, source: ValueSource) -> Result<()> {
         let bucket = self.vault.existing_bucket(name)?;
         guard!(!key.is_empty() && !key.contains('\n'), else: SboxError::InvalidKey);
         let summary = bucket.summarize_requiring_encryption()?;
 
-        let value = match value {
-            Some(value) => value,
-            None if Console::is_standard_input_a_terminal() => ask_for_value(&key)?,
-            None => read_value_from_standard_input()?,
+        let value = match source {
+            ValueSource::Argument(value) => value,
+            ValueSource::Dialog => ask_in_dialog(bucket.name(), &key)?,
+            ValueSource::TerminalOrStandardInput if Console::is_standard_input_a_terminal() => ask_for_value(&key)?,
+            ValueSource::TerminalOrStandardInput => read_value_from_standard_input()?,
         };
 
         let verb = if summary.contains_key(&key) { "atualizado" } else { "criado" };
@@ -260,7 +262,17 @@ fn ask_for_value(key: &str) -> Result<String> {
     Ok(value)
 }
 
-/// Lê o stdin inteiro, tirando só o `\n` final que o `echo` acrescenta.
+/// Pergunta numa janela do sistema, para quem chama o sbox sem terminal.
+fn ask_in_dialog(bucket: &str, key: &str) -> Result<String> {
+    let dialog = Dialog::available()?;
+    Console::note(&format!("aguardando o valor de {key} na janela do sbox…"));
+    let value = dialog.ask_hidden(&format!("Valor de {key} (bucket {bucket}):"))?;
+    guard!(!value.is_empty(), else: SboxError::EmptyValue);
+    Ok(value)
+}
+
+/// Lê o stdin inteiro, tirando só o `\n` final que o `echo` acrescenta. Vazio
+/// é recusado: sem terminal, um stdin fechado chega vazio e gravaria `""`.
 fn read_value_from_standard_input() -> Result<String> {
     let mut bytes = Vec::new();
     std::io::stdin().read_to_end(&mut bytes).map_err(|reason| SboxError::FileOperationFailed {
@@ -272,6 +284,7 @@ fn read_value_from_standard_input() -> Result<String> {
     if value.ends_with('\n') {
         value.pop();
     }
+    guard!(!value.is_empty(), else: SboxError::EmptyStandardInput);
     Ok(value)
 }
 

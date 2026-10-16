@@ -13,6 +13,15 @@ adota o [Versionamento Semântico](https://semver.org/lang/pt-BR/).
   ([#4](https://github.com/GabrielAderaldo/sops_box/issues/4)).
 - `tests/tests.sh` roda no macOS: clipboard via `pbcopy`, varredura de vazamento pelo `ps`
   quando não há `/proc`, e o teste do limite de 128 KB por variável restrito ao Linux.
+- `set --dialog`: pede o valor numa janela do sistema (`osascript` no macOS, `zenity` ou
+  `kdialog` no Linux), para quando não há terminal, como um agente de IA rodando o `sbox`
+  ([#6](https://github.com/GabrielAderaldo/sops_box/issues/6)).
+
+### Mudado
+
+- `set` recusa stdin vazio em vez de gravar `""` em silêncio. Sem terminal, um stdin fechado
+  chegava vazio e virava uma chave vazia com `✓ criado`. Valor vazio de propósito continua
+  possível como argumento: `sbox set <bucket> <CHAVE> ""`.
 
 ## [0.1.0] - 2026-10-05
 

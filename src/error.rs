@@ -36,6 +36,9 @@ pub enum SboxError {
     ValuesDoNotMatch,
     Cancelled,
     NoTerminal,
+    EmptyStandardInput,
+    DialogWithValue,
+    NoDialog,
 
     // sops
     SopsFailed { subcommand: String, status: i32, standard_error: String },
@@ -46,6 +49,7 @@ pub enum SboxError {
     // Sistema
     LaunchFailed { program: String, reason: io::Error },
     ClipboardFailed { tool: &'static str, status: i32 },
+    DialogFailed { tool: &'static str, status: i32, standard_error: String },
     FileAlreadyExists { path: String },
     FileOperationFailed { action: &'static str, path: String, reason: io::Error },
 }
@@ -81,7 +85,17 @@ impl fmt::Display for SboxError {
             EmptyValue => write!(formatter, "valor vazio, nada foi gravado"),
             ValuesDoNotMatch => write!(formatter, "os valores não batem, nada foi gravado"),
             Cancelled => write!(formatter, "cancelado"),
-            NoTerminal => write!(formatter, "sem terminal para perguntar (passe o valor pelo stdin)"),
+            NoTerminal => write!(formatter, "sem terminal para perguntar (passe o valor pelo stdin ou use --dialog)"),
+            EmptyStandardInput => write!(
+                formatter,
+                "stdin vazio, nada foi gravado — sem terminal, use --dialog para perguntar numa janela \
+                 (valor vazio de propósito: sbox set <bucket> <CHAVE> \"\")"
+            ),
+            DialogWithValue => write!(formatter, "set: use --dialog ou o valor na linha de comando, não os dois"),
+            NoDialog => write!(
+                formatter,
+                "sem janela para perguntar: o --dialog precisa de sessão gráfica e, no Linux, de zenity ou kdialog"
+            ),
 
             SopsFailed { subcommand, status, standard_error } => {
                 write!(formatter, "sops {subcommand} falhou (código {status})")?;
@@ -102,6 +116,13 @@ impl fmt::Display for SboxError {
 
             LaunchFailed { program, reason } => write!(formatter, "não consegui executar `{program}`: {reason}"),
             ClipboardFailed { tool, status } => write!(formatter, "{tool} falhou (código {status})"),
+            DialogFailed { tool, status, standard_error } => {
+                write!(formatter, "{tool} falhou (código {status})")?;
+                if !standard_error.is_empty() {
+                    write!(formatter, ":\n{standard_error}")?;
+                }
+                Ok(())
+            }
             FileAlreadyExists { path } => write!(formatter, "{path} já existe"),
             FileOperationFailed { action, path, reason } => write!(formatter, "não consegui {action} {path}: {reason}"),
         }

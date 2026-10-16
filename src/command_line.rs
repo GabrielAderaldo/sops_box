@@ -34,6 +34,8 @@ Secrets
   set <bucket> <CHAVE> [valor]  cria/atualiza; sem valor, pergunta escondido
                                 ou lê do stdin (prefira: valor na linha de
                                 comando vai pro histórico do shell)
+  set <bucket> <CHAVE> --dialog pergunta numa janela do sistema; para quando
+                                não há terminal (ex.: um agente de IA)
   rm <bucket> <CHAVE> [-y]      remove a chave
   run <bucket> -- <cmd...>      roda o comando com os secrets como variáveis
                                 de ambiente
@@ -57,7 +59,7 @@ pub enum Command {
 
     ShowSecrets { bucket: String, reveal_values: bool },
     GetSecret { bucket: String, key: String, destination: SecretDestination },
-    SetSecret { bucket: String, key: String, value: Option<String> },
+    SetSecret { bucket: String, key: String, source: ValueSource },
     RemoveSecret { bucket: String, key: String, skip_confirmation: bool },
     RunWithSecrets { bucket: String, command: Vec<String> },
 }
@@ -66,6 +68,15 @@ pub enum Command {
 pub enum SecretDestination {
     StandardOutput,
     Pasteboard { clearing_after: Option<Duration> },
+}
+
+/// De onde vem o valor do `set`.
+pub enum ValueSource {
+    Argument(String),
+    /// Pergunta escondida se o stdin for um terminal; senão, lê o stdin.
+    TerminalOrStandardInput,
+    /// Janela do sistema (`--dialog`).
+    Dialog,
 }
 
 pub struct Invocation {
@@ -144,12 +155,17 @@ impl Command {
                 }
             }
             "set" => {
-                arguments.validate("set", 2..=3, &[])?;
-                Command::SetSecret {
-                    bucket: arguments.next_positional(),
-                    key: arguments.next_positional(),
-                    value: arguments.positional.pop_front(),
-                }
+                arguments.validate("set", 2..=3, &["--dialog"])?;
+                let from_dialog = arguments.has_flag("--dialog");
+                guard!(!(from_dialog && arguments.positional.len() == 3), else: SboxError::DialogWithValue);
+                let bucket = arguments.next_positional();
+                let key = arguments.next_positional();
+                let source = match arguments.positional.pop_front() {
+                    Some(value) => ValueSource::Argument(value),
+                    None if from_dialog => ValueSource::Dialog,
+                    None => ValueSource::TerminalOrStandardInput,
+                };
+                Command::SetSecret { bucket, key, source }
             }
             "rm" => {
                 arguments.validate("rm", 2..=2, &["--yes"])?;
@@ -268,6 +284,7 @@ fn canonical_flag(argument: &str) -> Option<&'static str> {
         "-a" | "--all" => Some("--all"),
         "-r" | "--reveal" => Some("--reveal"),
         "-c" | "--copy" => Some("--copy"),
+        "--dialog" => Some("--dialog"),
         "-y" | "--yes" => Some("--yes"),
         "-h" | "--help" => Some("--help"),
         "-V" | "--version" => Some("--version"),

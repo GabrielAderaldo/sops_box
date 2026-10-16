@@ -305,7 +305,7 @@ $ sbox get pessoal GITHUB_TOKEN -c
     aparece no `ps`.
 - Falha se a chave não existir.
 
-### `sbox set <bucket> <CHAVE> [valor]`
+### `sbox set <bucket> <CHAVE> [valor | --dialog]`
 
 Cria ou atualiza uma chave.
 
@@ -330,7 +330,37 @@ O valor vem de uma destas fontes, nesta ordem:
    para pegar erro de digitação. Valor vazio ou valores diferentes cancelam sem gravar.
    Um Ctrl-C no meio da pergunta religa o eco do terminal antes de sair.
 3. **stdin inteiro**, se ele vier de um pipe ou arquivo. Só o último `\n` é removido (aquele
-   que o `echo` acrescenta). O resto é preservado.
+   que o `echo` acrescenta). O resto é preservado. stdin **vazio é recusado**: sem
+   terminal, um stdin fechado chega vazio, e gravar `""` em silêncio esconderia o erro. Para
+   gravar um valor vazio de propósito, passe-o como argumento: `sbox set pessoal X ""`.
+4. **Janela do sistema**, com `--dialog`. Veja abaixo.
+
+#### `--dialog`: perguntar numa janela
+
+Para quando quem roda o `sbox` não tem terminal, como um **agente de IA** (Claude Code, Codex…)
+no meio de um fluxo de desenvolvimento. O agente escolhe o bucket e o nome da chave; você só
+cola o valor numa janela, e ele recebe apenas a confirmação.
+
+```console
+$ sbox set openai OPENAI_API_KEY --dialog
+aguardando o valor de OPENAI_API_KEY na janela do sbox…
+✓ OPENAI_API_KEY criado em openai
+```
+
+- A janela é do sistema, chamada como programa externo: `osascript` no macOS; `zenity` ou,
+  na falta dele, `kdialog` no Linux (que também exige sessão gráfica, `DISPLAY` ou
+  `WAYLAND_DISPLAY`).
+- O campo é escondido. A janela mostra o bucket e a chave, para você saber o que está gravando.
+- O valor volta da janela pelo stdout dela, num pipe, e segue para o sops pelo stdin. Nunca
+  vira argumento de processo nem passa pelo chat do agente.
+- **Cancelar** ou deixar a janela parada por **5 minutos** não grava nada (no `kdialog` não
+  há tempo limite).
+- O bucket é validado **antes** de a janela abrir.
+- Não combina com `[valor]`.
+
+Isso impede que o valor passe pela conversa e pelos logs do agente. Mas não impede que um
+agente com acesso ao shell rode `sbox get` depois. Para o agente **usar** a chave sem vê-la,
+use `sbox run <bucket> -- <comando>`.
 
 Detalhes:
 
@@ -459,7 +489,10 @@ sbox show pessoal                # quais chaves existem (sem decriptar)
 | ``não consegui executar `sops` `` | sops fora do `PATH` | instale o sops ou aponte `SOPS_BIN` |
 | `valores aninhados (mapas/listas) não são suportados` | bucket editado à mão com estrutura | o `sbox` só lida com `CHAVE: valor` de primeiro nível; use `sops` direto nesse arquivo |
 | `'x' não serve como variável de ambiente` | chave com `=` no nome, no `run` | renomeie a chave: `get` → `set` com outro nome → `rm` |
-| `sem terminal para perguntar` | `set` sem valor, sem terminal e com stdin fechado | passe o valor pelo stdin |
+| `sem terminal para perguntar` | `set` sem valor, sem terminal e com stdin fechado | passe o valor pelo stdin ou use `--dialog` |
+| `stdin vazio, nada foi gravado` | `set` sem valor rodado sem terminal (ex.: por um agente de IA) | use `--dialog`; para gravar vazio de propósito, `set <bucket> <CHAVE> ""` |
+| `sem janela para perguntar` | `--dialog` no Linux sem sessão gráfica ou sem `zenity`/`kdialog` | instale `zenity` ou `kdialog`; em SSH, passe o valor pelo stdin |
+| `osascript falhou` / `zenity falhou` | a janela não pôde abrir (ex.: macOS via SSH, sem sessão de usuário) | rode na sessão gráfica ou passe o valor pelo stdin |
 | `xclip falhou` / `wl-copy falhou` | ferramenta ausente ou sem sessão gráfica | instale `xclip` ou `wl-clipboard`; em SSH, use `get` sem `-c` |
 | terminal ficou sem eco | (não deveria acontecer) | rode `stty sane` e [abra uma issue](https://github.com/GabrielAderaldo/sops_box/issues) |
 

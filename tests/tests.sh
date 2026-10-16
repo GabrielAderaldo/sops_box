@@ -73,8 +73,11 @@ printf '\x01\x02ctrl\x1f' | s set pessoal K 2>/dev/null
 eq  "roundtrip: caracteres de controle" "$(printf '\x01\x02ctrl\x1f')" "$(getx pessoal K)"
 printf 'fim com newlines\n\n\n' | s set pessoal K 2>/dev/null
 eq  "roundtrip: só o último \\n do pipe é removido" $'fim com newlines\n\nx' "$(s get pessoal K; echo x)"
-printf '' | s set pessoal VAZIO 2>/dev/null
-eq  "valor vazio via pipe" "" "$(getx pessoal VAZIO)"
+ko  "stdin vazio é recusado" s set pessoal VAZIO </dev/null
+has "stdin vazio sugere --dialog" "--dialog" "$(s set pessoal VAZIO 2>&1 </dev/null)"
+result "…e nada foi gravado" $(! grep -q '^VAZIO:' "$V/pessoal.enc.yaml"; echo $?)
+s set pessoal VAZIO "" 2>/dev/null
+eq  "valor vazio de propósito, como argumento" "" "$(getx pessoal VAZIO)"
 BIG=$(head -c 150000 /dev/urandom | base64 -w0)
 printf '%s' "$BIG" | s set pessoal GRANDE 2>/dev/null
 eq  "valor de 200 KB" "${#BIG}" "$(getx pessoal GRANDE | wc -c | tr -d ' ')"
@@ -100,6 +103,38 @@ eq  "…e a chave continua" "2" "$(getx pessoal A)"
 eq  "get em pipe não adiciona \\n" "7" "$(s get pessoal TOKEN | wc -c | tr -d ' ')"
 result "saída em pipe sem códigos de cor" $(s ls | grep -q $'\033'; [ $? != 0 ]; echo $?)
 eq  "sops decrypt direto confirma o conteúdo" "tok-123" "$(cd "$V" && sops decrypt --extract '["TOKEN"]' pessoal.enc.yaml)"
+
+echo "set --dialog (diálogo falso no PATH)"
+# O mesmo script faz o papel do osascript (macOS) e do zenity (Linux); DISPLAY
+# finge a sessão gráfica que o Linux exige.
+DLG=$ROOT/dialog-bin; mkdir -p "$DLG"
+cat > "$DLG/osascript" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$*" > "$FAKE_DIALOG_ARGS"
+[ -n "${FAKE_DIALOG_CANCEL:-}" ] && { echo 'execution error: User canceled. (-128)' >&2; exit 1; }
+[ -n "${FAKE_DIALOG_BROKEN:-}" ] && { echo 'quebrado' >&2; exit 3; }
+printf '%s\n' "$FAKE_DIALOG_VALUE"
+EOF
+chmod +x "$DLG/osascript"; cp "$DLG/osascript" "$DLG/zenity"
+export FAKE_DIALOG_ARGS=$ROOT/dialog-args
+dlg() { env DISPLAY=:99 PATH="$DLG:$PATH" "$BIN" "$@" </dev/null; }
+has "grava o valor digitado na janela" "DO_DIALOGO criado" "$(FAKE_DIALOG_VALUE='valor da janela' dlg set pessoal DO_DIALOGO --dialog 2>&1)"
+eq  "…e o valor é o da janela" "valor da janela" "$(getx pessoal DO_DIALOGO)"
+has "a janela mostra bucket e chave" "Valor de DO_DIALOGO (bucket pessoal)" "$(cat "$FAKE_DIALOG_ARGS")"
+result "o valor nunca vira argumento da janela" $(! grep -q 'valor da janela' "$FAKE_DIALOG_ARGS"; echo $?)
+FAKE_DIALOG_VALUE='novo' dlg set pessoal DO_DIALOGO --dialog >/dev/null 2>&1
+eq  "atualiza chave existente" "novo" "$(getx pessoal DO_DIALOGO)"
+has "cancelar não grava" "cancelado" "$(FAKE_DIALOG_CANCEL=1 dlg set pessoal CANCELADA --dialog 2>&1)"
+result "…e a chave não existe" $(! grep -q '^CANCELADA:' "$V/pessoal.enc.yaml"; echo $?)
+has "valor vazio na janela não grava" "valor vazio" "$(FAKE_DIALOG_VALUE='' dlg set pessoal VAZIA --dialog 2>&1)"
+has "falha da ferramenta é repassada" "quebrado" "$(FAKE_DIALOG_BROKEN=1 dlg set pessoal X --dialog 2>&1)"
+has "--dialog com valor é recusado" "não os dois" "$(dlg set pessoal X valor --dialog 2>&1)"
+rm -f "$FAKE_DIALOG_ARGS"
+has "bucket inexistente falha…" "não existe" "$(FAKE_DIALOG_VALUE=v dlg set nada X --dialog 2>&1)"
+result "…antes de abrir a janela" $([ ! -e "$FAKE_DIALOG_ARGS" ]; echo $?)
+if [ "$(uname)" = Linux ]; then
+    has "sem sessão gráfica, explica" "sem janela" "$(env -u DISPLAY -u WAYLAND_DISPLAY "$BIN" set pessoal X --dialog 2>&1)"
+fi
 
 echo "run"
 # Bucket próprio: o Linux limita cada variável de ambiente a 128 KB, e o GRANDE tem 200 KB.

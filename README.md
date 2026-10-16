@@ -59,6 +59,7 @@ sbox ls                          # buckets, contagem de chaves, aviso de texto p
 sbox new pessoal                 # cria um bucket já encriptado
 sbox set pessoal GITHUB_TOKEN    # pergunta o valor escondido (2x)
 echo -n "$X" | sbox set pessoal X
+sbox set pessoal X --dialog      # pergunta numa janela (sem terminal, ex.: agente de IA)
 sbox show pessoal                # chaves mascaradas (nem decripta)
 sbox show pessoal -r             # revela os valores
 sbox get pessoal GITHUB_TOKEN    # imprime o valor
