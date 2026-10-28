@@ -72,7 +72,11 @@ done
 printf '\x01\x02ctrl\x1f' | s set pessoal K 2>/dev/null
 eq  "roundtrip: caracteres de controle" "$(printf '\x01\x02ctrl\x1f')" "$(getx pessoal K)"
 printf 'fim com newlines\n\n\n' | s set pessoal K 2>/dev/null
-eq  "roundtrip: só o último \\n do pipe é removido" $'fim com newlines\n\nx' "$(s get pessoal K; echo x)"
+eq  "roundtrip: várias linhas mantêm os \\n finais" $'fim com newlines\n\n\nx' "$(s get pessoal K; echo x)"
+KEY=$'-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaA==\n-----END OPENSSH PRIVATE KEY-----\n'
+printf '%s' "$KEY" | s set pessoal SSH 2>/dev/null
+eq  "roundtrip: chave SSH mantém o \\n final" "${KEY}x" "$(s get pessoal SSH; echo x)"
+result "chave SSH no arquivo é idêntica" $(s get pessoal SSH | cmp -s - <(printf '%s' "$KEY"); echo $?)
 ko  "stdin vazio é recusado" s set pessoal VAZIO </dev/null
 has "stdin vazio sugere --dialog" "--dialog" "$(s set pessoal VAZIO 2>&1 </dev/null)"
 result "…e nada foi gravado" $(! grep -q '^VAZIO:' "$V/pessoal.enc.yaml"; echo $?)

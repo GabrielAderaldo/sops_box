@@ -271,8 +271,10 @@ fn ask_in_dialog(bucket: &str, key: &str) -> Result<String> {
     Ok(value)
 }
 
-/// Lê o stdin inteiro, tirando só o `\n` final que o `echo` acrescenta. Vazio
-/// é recusado: sem terminal, um stdin fechado chega vazio e gravaria `""`.
+/// Lê o stdin inteiro. Se for uma linha só, tira o `\n` final que o `echo`
+/// acrescenta; com várias linhas (chave SSH, certificado) grava exato, porque
+/// ali o `\n` final faz parte do formato. Vazio é recusado: sem terminal, um
+/// stdin fechado chega vazio e gravaria `""`.
 fn read_value_from_standard_input() -> Result<String> {
     let mut bytes = Vec::new();
     std::io::stdin().read_to_end(&mut bytes).map_err(|reason| SboxError::FileOperationFailed {
@@ -281,7 +283,7 @@ fn read_value_from_standard_input() -> Result<String> {
         reason,
     })?;
     let mut value = String::from_utf8_lossy(&bytes).into_owned();
-    if value.ends_with('\n') {
+    if value.ends_with('\n') && value.matches('\n').count() == 1 {
         value.pop();
     }
     guard!(!value.is_empty(), else: SboxError::EmptyStandardInput);
