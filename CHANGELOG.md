@@ -7,6 +7,12 @@ adota o [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
+### Mudado
+
+- A suíte de ponta a ponta saiu do `tests/tests.sh` (bash) para `tests/*.t` em Perl 5, só com
+  módulos do core, rodada pelo `prove`. Os casos são os mesmos, e ela passa a ser o contrato
+  comum da versão em Rust e da futura versão Windows em C# (`windows/`).
+
 ## [0.3.0] - 2026-10-16
 
 ### Mudado

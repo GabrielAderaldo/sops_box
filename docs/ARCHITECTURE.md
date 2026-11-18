@@ -75,7 +75,7 @@ O código imita, de propósito, a leitura de Swift com Foundation:
 ## Garantias (invariantes)
 
 São as regras que o código mantém. Qualquer mudança que quebre uma delas é um bug, e
-mudanças nessas áreas pedem teste em `tests/tests.sh`.
+mudanças nessas áreas pedem teste em `tests/`.
 
 ### Segredos
 
@@ -136,8 +136,10 @@ mudanças nessas áreas pedem teste em `tests/tests.sh`.
 
 ## Testes
 
-A suíte em `tests/tests.sh` é **de ponta a ponta**: compila o binário de release, cria
-cofres temporários (fora de `~/secrets`) e roda o `sops` de verdade. Ela cobre:
+A suíte em `tests/*.t` é **de ponta a ponta** e escrita em Perl 5, só com o core. Ela roda o
+binário apontado por `SBOX_BIN`, cria cofres temporários (fora de `~/secrets`) e usa o `sops`
+de verdade. Como só olha a linha de comando, stdin, stdout, stderr e o código de saída, ela é
+o contrato comum da versão em Rust e da versão Windows em C# (`windows/`). Ela cobre:
 
 - todos os comandos, casos de sucesso e de erro;
 - valores difíceis (aspas, barras, quebras de linha, tabs, acentos, emoji, CJK, espaços nas

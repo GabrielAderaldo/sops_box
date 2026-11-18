@@ -77,15 +77,31 @@ AGPL-3.0 (MIT, Apache-2.0, BSD, ISC, MPL-2.0, LGPL, GPL-3.0 etc.).
 
 ## Testes
 
-A suíte em [`tests/tests.sh`](tests/tests.sh) é de ponta a ponta. Para cada mudança de
-comportamento, adicione casos usando os auxiliares que já existem:
+A suíte em [`tests/`](tests) é de ponta a ponta e escrita em Perl 5, só com módulos do core
+(`Test::More`, rodada pelo `prove`). Ela é o **contrato** do `sbox`: conversa com o binário
+só pela linha de comando, stdin, stdout, stderr e código de saída, e roda igual contra a
+versão em Rust (Linux/macOS) e contra a versão em C# ([`windows/`](windows)). Todo pull
+request precisa passar por ela no CI.
+
+```sh
+make test                                  # compila e roda tudo
+SBOX_BIN=target/release/sbox prove -v tests/02-secrets.t   # um arquivo só
+```
+
+Para cada mudança de comportamento, adicione casos no arquivo da área (`01-buckets.t`,
+`02-secrets.t`, …) com os auxiliares de [`tests/lib/Sbox/Test.pm`](tests/lib/Sbox/Test.pm):
 
 | auxiliar | confere |
 |---|---|
-| `ok "nome" cmd…` | o comando sai com 0 |
-| `ko "nome" cmd…` | o comando falha |
-| `eq "nome" esperado obtido` | igualdade exata |
-| `has "nome" trecho texto` | o texto contém o trecho |
+| `ok_run('nome', args…)` | o comando sai com 0 |
+| `ko_run('nome', args…)` | o comando falha |
+| `is(stdout_of(args…), esperado, 'nome')` | igualdade exata, byte a byte |
+| `contains(output_of(args…), trecho, 'nome')` | stdout + stderr contêm o trecho |
+| `sbox([args], stdin => …, env => {…})` | roda com stdin e ambiente próprios |
+| `make_tool('nome', código_perl)` | cria um executável falso (sops, janela) que funciona até no Windows |
+
+Comportamento que só existe numa plataforma fica atrás de `IS_LINUX`, `IS_MACOS` ou
+`IS_WINDOWS`. Para um arquivo inteiro, use `plan skip_all`, sempre com o motivo.
 
 Correções de bug devem vir com um teste que falha antes da correção.
 
