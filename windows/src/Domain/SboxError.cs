@@ -6,11 +6,12 @@
 // texto do Rust: a suíte de contrato confere trechos como "já existe" e "texto puro".
 //
 // Em C# o "enum com dados" vira uma exceção com construtores nomeados: quem lança escreve
-// `throw SboxError.BucketNotFound(nome)`, e o Program.cs só imprime `erro: <mensagem>`.
+// `throw SboxError.BucketNotFound(nome)`, e o presenter só imprime `erro: <mensagem>`. Fica no
+// Domain porque os value objects lançam estes erros ao validar; as outras camadas também os usam.
 
 using System;
 
-namespace Sbox;
+namespace Sbox.Domain;
 
 internal sealed class SboxError : Exception
 {

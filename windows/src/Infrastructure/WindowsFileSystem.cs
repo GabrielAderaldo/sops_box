@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Gabriel Vieira Soriano Aderaldo
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-// Arquivos e diretórios, com os nomes do `FileManager` da Foundation (espelho de
-// src/file_manager.rs). Regra da casa: nunca sobrescrever um arquivo.
+// Arquivos e diretórios atrás da porta IFileSystem (espelho de src/file_manager.rs). Regra
+// da casa: nunca sobrescrever um arquivo.
 //
 // Publicação: o Rust grava num temporário e publica com link(), que falha se o destino
 // existe. Aqui a publicação é File.Move(temporário, destino, overwrite: false), que vira
@@ -15,55 +15,55 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using Sbox.Application.Ports;
+using Sbox.Domain;
 
-namespace Sbox;
+namespace Sbox.Infrastructure;
 
-internal static class FileManager
+internal sealed class WindowsFileSystem : IFileSystem
 {
     private const int ErrorFileExists = 80;
     private const int ErrorAlreadyExists = 183;
 
-    public static bool FileExists(string atPath) => Path.Exists(atPath);
+    public bool Exists(string path) => Path.Exists(path);
 
-    public static byte[] Contents(string atPath)
+    public byte[] Contents(string path)
     {
         try
         {
-            return File.ReadAllBytes(atPath);
+            return File.ReadAllBytes(path);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            throw Failure("abrir", atPath, exception);
+            throw Failure("abrir", path, exception);
         }
     }
 
-    /// Nomes das entradas do diretório, em ordem (ordinal, como a ordenação de String do Rust).
-    public static List<string> ContentsOfDirectory(string atPath)
+    public IReadOnlyList<string> ContentsOfDirectory(string path)
     {
         try
         {
-            return Directory.EnumerateFileSystemEntries(atPath)
-                .Select(path => Path.GetFileName(path))
+            return Directory.EnumerateFileSystemEntries(path)
+                .Select(entry => Path.GetFileName(entry))
                 .Order(StringComparer.Ordinal)
                 .ToList();
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            throw Failure("ler o diretório", atPath, exception);
+            throw Failure("ler o diretório", path, exception);
         }
     }
 
-    /// Cria `atPath` com `contents` sem nunca sobrescrever nada: grava num temporário
-    /// (CreateNew), força o disco (Flush(true), o fsync do Windows) e só então publica com
-    /// File.Move sem sobrescrever. Se qualquer passo falhar, `atPath` não é criado e o
-    /// temporário é removido: nada de arquivo vazio ou pela metade.
-    public static void CreateFileWithoutOverwriting(string atPath, byte[] contents)
+    /// Grava num temporário (CreateNew), força o disco (Flush(true), o fsync do Windows) e só
+    /// então publica com File.Move sem sobrescrever. Se qualquer passo falhar, `path` não é
+    /// criado e o temporário é removido.
+    public void CreateFileWithoutOverwriting(string path, byte[] contents)
     {
         string temporaryPath = $".sbox-tmp-{Environment.ProcessId}";
         try
         {
             WriteSynchronously(temporaryPath, contents);
-            MoveWithoutOverwriting(temporaryPath, atPath);
+            MoveWithoutOverwriting(temporaryPath, path);
         }
         finally
         {
@@ -79,41 +79,37 @@ internal static class FileManager
         }
     }
 
-    /// Renomeia sem sobrescrever o destino.
-    public static void MoveItemWithoutOverwriting(string atPath, string toPath) =>
-        MoveWithoutOverwriting(atPath, toPath);
+    public void MoveItemWithoutOverwriting(string path, string toPath) => MoveWithoutOverwriting(path, toPath);
 
-    public static void RemoveItem(string atPath)
+    public void RemoveItem(string path)
     {
         try
         {
-            File.Delete(atPath);
+            File.Delete(path);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            throw Failure("apagar", atPath, exception);
+            throw Failure("apagar", path, exception);
         }
     }
 
-    public static string CurrentDirectoryPath() => Environment.CurrentDirectory;
-
-    public static void ChangeCurrentDirectoryPath(string toPath)
+    public void ChangeCurrentDirectory(string path)
     {
         try
         {
-            Environment.CurrentDirectory = toPath;
+            Environment.CurrentDirectory = path;
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException)
         {
-            throw Failure("entrar em", toPath, exception);
+            throw Failure("entrar em", path, exception);
         }
     }
 
-    private static void MoveWithoutOverwriting(string atPath, string toPath)
+    private static void MoveWithoutOverwriting(string path, string toPath)
     {
         try
         {
-            File.Move(atPath, toPath, overwrite: false);
+            File.Move(path, toPath, overwrite: false);
         }
         catch (IOException exception) when ((exception.HResult & 0xFFFF) is ErrorFileExists or ErrorAlreadyExists)
         {

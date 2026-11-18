@@ -7,7 +7,7 @@
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
 
-namespace Sbox.Interop;
+namespace Sbox.Infrastructure.Interop;
 
 internal static partial class Kernel32
 {

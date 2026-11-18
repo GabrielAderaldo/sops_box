@@ -4,6 +4,12 @@
 // sbox — gerencia um cofre sops (%USERPROFILE%\secrets) sem digitar `sops` na mão
 // (espelho de src/main.rs). Só dois conceitos: bucket = arquivo `*.enc.yaml`;
 // secret = uma linha `CHAVE: valor` dentro dele.
+//
+// Composition root: monta os adaptadores (Infrastructure) e entrega à CLI (Presentation), à
+// mão. Sem container de DI: o NativeAOT não combina com reflection, e são quatro objetos.
+
+using Sbox.Infrastructure;
+using Sbox.Presentation;
 
 namespace Sbox;
 
@@ -11,32 +17,16 @@ internal static class Program
 {
     private static int Main(string[] arguments)
     {
+        Win32Terminal terminal = new();
         try
         {
-            Invocation invocation = Invocation.Parse(arguments);
-            switch (invocation.Command)
-            {
-                case Command.ShowHelp:
-                    Terminal.PrintLine(CommandLine.Usage);
-                    break;
-                case Command.ShowVersion:
-                    Terminal.PrintLine($"sbox {BuildInfo.Version}");
-                    break;
-                default:
-                    Vault vault = Vault.Locate(invocation.VaultDirectory);
-                    SboxCommands.Open(vault).Run(invocation.Command);
-                    break;
-            }
-            return 0;
-        }
-        catch (SboxError error)
-        {
-            Terminal.Error(error);
-            return 1;
+            ProcessEnvironment environment = new();
+            Cli cli = new(environment, new WindowsFileSystem(), SopsProcess.FromEnvironment(environment), terminal);
+            return cli.Run(arguments);
         }
         finally
         {
-            Terminal.RestoreConsoleModes();
+            terminal.RestoreConsoleModes();
         }
     }
 }

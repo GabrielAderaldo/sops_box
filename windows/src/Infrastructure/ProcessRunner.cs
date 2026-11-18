@@ -6,21 +6,15 @@
 // depois roda. Argumentos sempre por ArgumentList, nunca por string montada à mão, e
 // segredo nunca em argumento: vai pelo stdin.
 
-using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Text;
 using System.Threading.Tasks;
+using Sbox.Domain;
 
-namespace Sbox;
-
-internal static class ProcessInfo
-{
-    /// A variável de ambiente, ou nulo se não existir.
-    public static string? Environment(string name) => System.Environment.GetEnvironmentVariable(name);
-}
+namespace Sbox.Infrastructure;
 
 internal abstract record StandardInput
 {
