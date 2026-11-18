@@ -18,6 +18,10 @@ adota o [Versionamento Semântico](https://semver.org/lang/pt-BR/).
   saem com "ainda não implementado no Windows". O `new` continua sem gravar texto puro: no
   Windows o `sops encrypt` recebe o YAML pelo stdin sem argumento de arquivo. Sem `-y`, o
   `del` só pergunta quando o stdin é o console; com o stdin redirecionado, a resposta é "não".
+- Versão Windows organizada em camadas (`Domain`, `Application`, `Presentation`,
+  `Infrastructure`), com um caso de uso por comando e as dependências apontando só para
+  dentro. O bucket criado pelo `new` nasce com ACL só do usuário atual (o `0600` do Rust),
+  inclusive dentro do OneDrive, e o Ctrl+C devolve o modo original do console.
 
 ### Mudado
 
