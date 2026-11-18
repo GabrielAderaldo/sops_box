@@ -1,0 +1,14 @@
+# Arquivos de tests/ que já PRECISAM passar contra o sbox.exe. O CI (job "Testes de contrato
+# (Windows)") roda estes de forma obrigatória e a suíte inteira só como relatório.
+#
+# Ao deixar um arquivo verde, adicione-o aqui no mesmo commit. Nunca tire um arquivo da lista
+# para "consertar" o CI. Um arquivo pulado inteiro (skip_all) conta como passando.
+
+# Pulado no Windows: a janela (CredUI) é API, não programa trocável no PATH.
+03-dialog.t
+# Ainda passa sem nada implementado (nada é gravado, então nada vaza), mas fica aqui como
+# trava: a partir do primeiro `set` de verdade, valor na linha de comando ou texto puro no
+# disco quebram o CI.
+08-security.t
+# Pulado sem SBOX_OTHER_BIN.
+10-interop.t

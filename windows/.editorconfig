@@ -1,0 +1,16 @@
+# Regras só da versão Windows (C#). Herda o .editorconfig da raiz (UTF-8, LF, 4 espaços);
+# sem root = true de propósito. Com EnforceCodeStyleInBuild + TreatWarningsAsErrors, o que
+# estiver como warning aqui quebra o build.
+
+[*.{csproj,props,targets}]
+indent_size = 2
+
+[*.cs]
+csharp_style_namespace_declarations = file_scoped:warning
+csharp_prefer_braces = true:warning
+dotnet_style_qualification_for_field = false:warning
+dotnet_style_qualification_for_property = false:warning
+dotnet_style_qualification_for_method = false:warning
+dotnet_style_require_accessibility_modifiers = always:warning
+dotnet_style_readonly_field = true:warning
+csharp_style_var_for_built_in_types = false:suggestion
