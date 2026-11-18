@@ -14,6 +14,7 @@ using System.IO;
 using System.Text;
 using Microsoft.Win32.SafeHandles;
 using Sbox.Application.Ports;
+using Sbox.Domain;
 using Sbox.Infrastructure.Interop;
 
 namespace Sbox.Infrastructure;
@@ -25,6 +26,16 @@ internal sealed class Win32Terminal : ITerminal
     private readonly OutputChannel standardOutput = new(Kernel32.StandardOutputHandle);
     private readonly OutputChannel standardError = new(Kernel32.StandardErrorHandle);
 
+    /// Ctrl+C em qualquer ponto (inclusive no meio da pergunta s/N) devolve o modo original do
+    /// console antes de o processo morrer: o console é do shell de quem chamou, e ele não pode
+    /// ficar com o modo que o sbox ligou. A pergunta s/N não desliga o eco (a resposta aparece
+    /// ao digitar), então não há eco a religar aqui; a pergunta escondida do `set` (T4) vai
+    /// registrar o modo de entrada neste mesmo ponto.
+    public Win32Terminal()
+    {
+        Console.CancelKeyPress += (_, _) => RestoreConsoleModes();
+    }
+
     public void Write(TerminalStream stream, string text) => Channel(stream).Write(text);
 
     public bool SupportsColor(TerminalStream stream) => Channel(stream).SupportsColor;
@@ -35,13 +46,14 @@ internal sealed class Win32Terminal : ITerminal
     /// ninguém fica preso numa pergunta que não pediu.
     public string? AskLine(string prompt)
     {
-        if (Console.IsInputRedirected)
+        bool standardInputIsRedirected = Console.IsInputRedirected;
+        if (standardInputIsRedirected)
         {
-            return null;
+            return null; // nem abre o console
         }
         using SafeFileHandle input = OpenConsole("CONIN$");
         using SafeFileHandle output = OpenConsole("CONOUT$");
-        if (input.IsInvalid || output.IsInvalid)
+        if (!ConfirmationRules.CanAskInConsole(standardInputIsRedirected, !input.IsInvalid && !output.IsInvalid))
         {
             return null;
         }
