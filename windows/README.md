@@ -29,10 +29,22 @@ precisa ser verdade para ela valer e como testar.
   lista no mesmo commit; nunca sai dela.
 
 Ambiente desta máquina (2026-11-17): .NET SDK 10 e 11 instalados; `sops`, `age` e
-`cargo` ainda não. O `dotnet publish` com NativeAOT falha aqui (o `link.exe` do Visual
-Studio não é achado, sem `vswhere.exe` no PATH); o CI é quem confere o binário nativo.
+`cargo` ainda não.
 
 ### Rodar localmente
+
+O NativeAOT precisa do Visual Studio (ou Build Tools) com a carga **Desenvolvimento para
+desktop com C++**. No VS 2026, o `vcvarsall.bat` chama o `vswhere.exe` sem caminho, e o erro
+dele entra no comando do linker (`'vswhere.exe' não é reconhecido…` + `MSB3073`). A correção
+é pôr a pasta do instalador no PATH do usuário, uma vez:
+
+```powershell
+$dir = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer"
+[Environment]::SetEnvironmentVariable('Path', [Environment]::GetEnvironmentVariable('Path', 'User') + ";$dir", 'User')
+```
+
+Rode o `publish` pelo PowerShell ou cmd, não pelo Git Bash: o bash descarta a variável
+`ProgramFiles(x86)`, que o .NET usa para achar o Visual Studio.
 
 ```powershell
 dotnet build windows/Sbox.csproj                      # rápido, sem AOT
