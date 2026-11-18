@@ -8,8 +8,14 @@
 // Composition root: monta os adaptadores (Infrastructure) e entrega à CLI (Presentation), à
 // mão. Sem container de DI: o NativeAOT não combina com reflection, e são quatro objetos.
 
+using System.Runtime.Versioning;
 using Sbox.Infrastructure;
 using Sbox.Presentation;
+
+// Este programa só existe no Windows (console por kernel32, ACL do NTFS). Declarar isso uma
+// vez para o assembly satisfaz o analisador de plataforma (CA1416) sem trocar o TFM para
+// net10.0-windows, que mudaria os caminhos de saída usados no README e no CI.
+[assembly: SupportedOSPlatform("windows")]
 
 namespace Sbox;
 

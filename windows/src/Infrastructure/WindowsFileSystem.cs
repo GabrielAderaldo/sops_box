@@ -15,6 +15,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Security.AccessControl;
+using System.Security.Principal;
 using Sbox.Application.Ports;
 using Sbox.Domain;
 
@@ -121,12 +123,31 @@ internal sealed class WindowsFileSystem : IFileSystem
         }
     }
 
+    /// O `0600` do Rust: o arquivo já nasce com uma DACL protegida (sem herdar nada da pasta)
+    /// que dá acesso só ao usuário atual. A ACL vai no próprio CreateFileW (pelo
+    /// SECURITY_ATTRIBUTES que o FileSystemAclExtensions.Create monta), então não há instante
+    /// em que o arquivo exista com a ACL herdada. O File.Move no mesmo volume preserva o
+    /// descritor, e o bucket publicado fica só com o usuário.
+    private static FileSecurity OwnerOnlySecurity()
+    {
+        using WindowsIdentity identity = WindowsIdentity.GetCurrent();
+        SecurityIdentifier user = identity.User
+            ?? throw new UnauthorizedAccessException("sem SID para o usuário atual");
+        FileSecurity security = new();
+        security.SetOwner(user);
+        security.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
+        security.AddAccessRule(new FileSystemAccessRule(user, FileSystemRights.FullControl, AccessControlType.Allow));
+        return security;
+    }
+
     private static void WriteSynchronously(string path, byte[] contents)
     {
         FileStream file;
         try
         {
-            file = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+            file = new FileInfo(path).Create(
+                FileMode.CreateNew, FileSystemRights.Write, FileShare.None, bufferSize: 4096, FileOptions.None,
+                OwnerOnlySecurity());
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
