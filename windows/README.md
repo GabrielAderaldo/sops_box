@@ -28,8 +28,23 @@ precisa ser verdade para ela valer e como testar.
   obrigatória e a suíte inteira só como relatório. Ao deixar um arquivo verde, ele entra na
   lista no mesmo commit; nunca sai dela.
 
-Ambiente desta máquina (2026-11-17): .NET SDK 10 e 11 instalados; `sops`, `age` e
-`cargo` ainda não.
+- **Primeiros comandos: `ls`, `new`, `mv`, `del` e `show` sem `-r`** (`01-buckets.t` verde).
+  O parser de argumentos está inteiro, então todos os comandos são reconhecidos; os que
+  ainda não vieram (`set`, `get`, `rm`, `run`, `edit`, `encrypt`, `show -r`) saem com
+  `erro: … ainda não implementado no Windows`.
+- **Arquitetura em camadas** (decisão do dono; ver [Arquitetura](#arquitetura), abaixo).
+- **T1, T2, T7 e "sem terminal" decididos, OneDrive e ACL testados** (detalhes em cada
+  hipótese, abaixo).
+- **Diferenças de propósito em relação ao Rust**, todas por causa do Windows:
+  - o nome de bucket também recusa `\`, `:` (abriria um fluxo alternativo do NTFS: `a:b`
+    gravaria dentro do arquivo `a`), os outros caracteres que o Windows não aceita em nome
+    de arquivo e os nomes de dispositivo (`con`, `nul`, `com1`…);
+  - a última linha do `--help` fala em `%USERPROFILE%\secrets` e `%SOPS_BIN%`;
+  - a confirmação do `del` sem `-y` só pergunta quando o stdin é o console (ver T9).
+
+Ambiente desta máquina (2026-11-17): .NET SDK 10 e 11 instalados; `cargo` não. Para os
+testes locais, `sops` v3.13.3 e `age` v1.3.2 foram baixados (checksums conferidos) para uma
+pasta temporária e usados só na sessão, sem instalar nada.
 
 ### Rodar localmente
 
@@ -58,18 +73,52 @@ prove tests/                                          # a suíte inteira
 A suíte precisa de um `.sops.yaml` em `%USERPROFILE%\secrets` (ou `SBOX_TEST_SOPS_CONFIG`)
 e, para os testes que gravam de verdade, de `sops` e `age` no PATH.
 
+### Arquitetura
+
+O Rust é um crate plano; aqui o código fica em camadas, e as dependências só apontam para
+dentro. Os nomes de domínio continuam os do Rust, para a leitura lado a lado.
+
+```text
+  argv ──▶ Presentation ──────────────▶ Application ──────────▶ Domain
+           CommandLine (argv → Command)  um caso de uso por      BucketName, Bucket,
+           Cli (fluxo, código de saída)  comando: OpenVault,     BucketSummary, Vault,
+           Presenter (único que formata) ListBuckets, ShowBucket, Ciphertext, SboxError,
+           TerminalConfirmation          CreateBucket,           ConfirmationRules
+                     │                   MoveBucket, DeleteBucket (sem I/O)
+                     │                         │
+                     │                   Ports: IFileSystem, ISops,
+                     │                   IConfirmation, IEnvironment, ITerminal
+                     │                         ▲
+  Program.cs ──▶ Infrastructure ───────────────┘ (implementa as portas)
+  (monta tudo    WindowsFileSystem, SopsProcess, Win32Terminal,
+   à mão)        ProcessEnvironment, ProcessRunner, Interop/Kernel32
+```
+
+| camada | o que tem | regra |
+|---|---|---|
+| `Domain/` | value objects que validam no `Parse` (`BucketName`), entidades (`Bucket`, `Vault`), o parser do YAML sem decriptar (`BucketSummary`), a conferência do bloco `sops:` (`Ciphertext`), as regras puras da pergunta s/N (`ConfirmationRules`) e todas as mensagens (`SboxError`) | sem I/O, sem console, sem processos |
+| `Application/` | um caso de uso por comando e as portas (`Ports/`) | recebe portas, devolve resultados tipados, nunca escreve no console |
+| `Presentation/` | `CommandLine` (argv → `Command`), `Cli` (fluxo e código de saída), `Presenter`, `TerminalConfirmation` | única camada que formata texto e cores |
+| `Infrastructure/` | os adaptadores das portas e o P/Invoke (`Interop/`) | conversa com o Windows |
+| `Program.cs` | composition root | monta tudo à mão, sem container de DI (NativeAOT, sem reflection) |
+
+O `ITerminal` fica em `Application/Ports` mesmo sem caso de uso nenhum usá-lo: assim a
+Presentation (que formata) e a Infrastructure (que fala com o console) dependem só para
+dentro, e não uma da outra. A confirmação recebe um pedido tipado
+(`ConfirmationRequest.DeleteBucket(nome, chaves)`), e o texto da pergunta sai do `Presenter`.
+
 ## O que precisa continuar valendo
 
 As garantias do [`ARCHITECTURE.md`](../docs/ARCHITECTURE.md#garantias-invariantes). As que
 dependem de Unix hoje:
 
-| # | garantia | depende de |
-|---|---|---|
-| 2 | texto puro nunca no disco | `sops encrypt … /dev/stdin` |
-| 5 | clipboard limpo só se ainda tiver o segredo | `sh` + `sha256sum` soltos |
-| 6 | terminal nunca fica sem eco | `/dev/tty`, `termios`, `SIGINT` |
-| 7 | nunca sobrescrever | `link()` + temporário `0600` |
-| 11 | `run` sem processo intermediário | `exec` |
+| # | garantia | depende de | no Windows |
+|---|---|---|---|
+| 2 | texto puro nunca no disco | `sops encrypt … /dev/stdin` | **mantida**: `sops encrypt` sem arquivo lê o stdin (T1) |
+| 5 | clipboard limpo só se ainda tiver o segredo | `sh` + `sha256sum` soltos | a fazer (T3) |
+| 6 | terminal nunca fica sem eco | `/dev/tty`, `termios`, `SIGINT` | a fazer (T4); o Ctrl+C já devolve o modo do console |
+| 7 | nunca sobrescrever | `link()` + temporário `0600` | **mantida**: `File.Move` sem sobrescrever e temporário com ACL só do usuário (T2) |
+| 11 | `run` sem processo intermediário | `exec` | não dá igual (T5) |
 
 O resto (argumentos, leitura do YAML, JSON, chamadas ao sops, mensagens) é lógica pura.
 
@@ -140,6 +189,26 @@ YAML no stdin, variando o último argumento (`-`, nenhum, `CON`, `\\.\pipe\…`)
 criar o bucket por `sops set` em cima de um arquivo já encriptado vazio. Decidir antes
 de começar.
 
+**Resultado (2026-11-17, `sops-v3.13.3.amd64.exe`, PowerShell 5.1, NTFS):** omitir o
+arquivo funciona, e a garantia 2 continua valendo.
+
+| último argumento | resultado |
+|---|---|
+| nenhum | **código 0**, YAML encriptado com o bloco `sops:` no stdout |
+| `-` | código 100: `cannot operate on non-existent file "…\-"` |
+| `/dev/stdin` | código 100: `cannot operate on non-existent file "C:\dev\stdin"` |
+| `CON` | trava esperando o teclado (lê o console, não o pipe) |
+
+No código do sops (`cmd/sops/main.go` e `cmd/sops/encrypt.go` da tag v3.13.3), sem
+argumento posicional o `encrypt` liga `ReadFromStdin` e faz `io.ReadAll(os.Stdin)`: o texto
+fica na memória, nada de temporário. Nesse modo o `--filename-override` é obrigatório
+(`must specify --filename-override when reading from stdin`), e é ele que casa com o
+`path_regex` (T7). Conferido também: um YAML com `K: segredo` encriptado assim não tem
+`segredo` no arquivo, e o `sops decrypt` devolve `{"K": "segredo"}`; stdin vazio dá
+código 92 (`File cannot be completely empty`). O `sbox` continua conferindo o bloco
+`sops:` na saída (garantia 3). Vale para o sops 3.10 em diante, quando o `encrypt` passou
+a aceitar o stdin; a suíte e o CI usam o 3.13.3.
+
 ### T2. "Nunca sobrescrever" sobrevive (garantia 7)
 
 `File.Move(origem, destino, overwrite: false)` (= `MoveFileExW` sem
@@ -147,6 +216,55 @@ de começar.
 Temporário com `FileMode.CreateNew`, `FileShare.None`, ACL só do usuário atual, e
 `Flush(flushToDisk: true)` no lugar do `fsync`. Testar em NTFS e numa pasta do OneDrive
 (o `%USERPROFILE%` costuma estar sincronizado).
+
+**Decidido: `File.Move(temporário, destino, overwrite: false)`**, em
+[`WindowsFileSystem.cs`](src/Infrastructure/WindowsFileSystem.cs). Criar = `.sbox-tmp-<pid>`
+com `FileMode.CreateNew`, `FileShare.None` e ACL só do usuário (abaixo), gravar, `Flush(flushToDisk: true)` (`FlushFileBuffers`) e publicar com
+`File.Move` sem sobrescrever; o temporário é apagado num `finally`, então some em qualquer
+falha. Renomear (`mv`) = o mesmo `File.Move`. O `File.Move` vira `MoveFileExW` sem
+`MOVEFILE_REPLACE_EXISTING`: falha com `ERROR_ALREADY_EXISTS` (vira `… já existe`) e, no
+mesmo volume, é um rename atômico. Preferido ao `CreateHardLinkW` porque hard link não
+existe em FAT/exFAT (pendrives) nem em alguns compartilhamentos de rede, e porque o
+`File.Move` faz em um passo o que no Rust é `link()` + `unlink()`.
+Testado em NTFS (suíte local e CI).
+
+**ACL só do usuário (o `0600` do Rust): feito.** O temporário é criado por
+`FileInfo.Create(FileMode.CreateNew, …, FileSecurity)` (o `FileSystemAclExtensions` do BCL),
+com uma DACL **protegida** (não herda nada da pasta), dono = usuário atual e uma única regra:
+o SID do usuário atual com controle total. A ACL vai no próprio `CreateFileW`
+(`SECURITY_ATTRIBUTES`), então não há instante em que o arquivo exista com a ACL herdada.
+Escolhido em vez de `CreateFileW` + SDDL por P/Invoke porque é só BCL e publica com NativeAOT
+sem nenhum aviso de trimming/AOT; o custo é ~150 KB no `sbox.exe` e declarar
+`[assembly: SupportedOSPlatform("windows")]` (CA1416) no `Program.cs`. Conferido com
+`icacls`/`Get-Acl`, numa pasta cuja ACL herdada é `SISTEMA`, `Administradores` e o usuário:
+
+| arquivo | ACL |
+|---|---|
+| pasta do cofre | `SISTEMA:(I)(OI)(CI)(F)`, `Administradores:(I)(OI)(CI)(F)`, `PC:(I)(OI)(CI)(F)` |
+| `.sops.yaml` (copiado) | `SISTEMA:(I)(F)`, `Administradores:(I)(F)`, `PC:(I)(F)` |
+| bucket do `sbox new` | `PC:(F)`, sem `(I)`; `AreAccessRulesProtected = True` |
+| o mesmo bucket depois do `sbox mv` | `PC:(F)` (o `File.Move` no mesmo volume preserva o descritor) |
+
+Nada de ACL estranha depois do `File.Move`. Consequências: `SISTEMA` e `Administradores`
+perdem o acesso direto ao bucket (como o `root` no `0600`, um administrador ainda consegue
+tomar posse); backup e antivírus que rodam como `SISTEMA` usam o privilégio de backup e não
+são afetados. Falta ver o que o `sops set` (quando vier) faz com a ACL ao regravar o arquivo.
+
+**OneDrive: testado (2026-11-17).** A máquina tem `%OneDrive%` (`C:\Users\PC\OneDrive`,
+pasta com reparse point) e o serviço `OneDrive.Sync.Service` rodando. Numa pasta descartável
+dentro dele (apagada no fim; a chave age ficou fora, no diretório temporário), com
+`TMPDIR` apontando para lá para a suíte criar os cofres ali dentro:
+
+- `01-buckets.t`: 21/21.
+- À mão: 5 rodadas de `new` + `mv` seguidas, `ls`, 5 `del -y`: todas com código 0, nenhum
+  `.sbox-tmp-*` largado, nenhum bloqueio do sync (`CreateNew`, `Flush(true)` e `File.Move`
+  sem erro). O bucket publicado fica com atributo só `Archive` e ACL `PC:(F)`.
+
+**Não testado:** bucket "somente online" (atributo `RecallOnDataAccess`). O `ls` lê o arquivo
+inteiro, então nesse caso o Windows baixaria o conteúdo (precisa de rede) antes de mostrar as
+chaves; sem rede, a leitura falharia com `não consegui abrir …`. Também não dá para garantir
+como o OneDrive trata a DACL protegida ao sincronizar para outra máquina (ele não sincroniza
+ACLs; o arquivo baixado em outro PC herda a pasta de lá).
 
 ### T3. Clipboard privado e com limpeza (garantia 5)
 
@@ -161,6 +279,11 @@ conteúdo atual ainda tiver o mesmo hash.
 Abrir `CONIN$` (equivalente ao `/dev/tty`: funciona com stdin redirecionado), desligar
 `ENABLE_ECHO_INPUT` com `SetConsoleMode` e religar no `finally` e no `Console.CancelKeyPress`.
 Sem console (ex.: agente de IA) → confirmações respondem "não", como hoje.
+
+**Já feito:** o `Win32Terminal` registra um `Console.CancelKeyPress` que devolve o modo
+original do console (o processamento de terminal virtual que ele liga para as cores) antes
+de o Ctrl+C encerrar o processo, inclusive no meio da pergunta s/N. A pergunta s/N não
+desliga o eco; a pergunta escondida do `set` vai guardar o modo de entrada nesse mesmo ponto.
 
 ### T5. `run` sem `exec` (garantia 11 — não dá para manter igual)
 
@@ -181,11 +304,29 @@ O sops casa o `path_regex` com o caminho do arquivo. Regras escritas com `/` pod
 casar com `C:\Users\…\secrets\x.enc.yaml`. Testar com o `.sops.yaml` do cofre real
 antes de qualquer coisa; afeta a interoperabilidade entre máquinas.
 
+**Resultado:** para os buckets do `sbox`, casa igual nas duas plataformas. O sops tira do
+caminho o diretório do `.sops.yaml` antes de aplicar a regex
+(`strings.TrimPrefix(filePath, configDir + separador)` em `config/config.go`, v3.13.3), e o
+`sbox` roda com o diretório atual = cofre e passa `--filename-override <nome>.enc.yaml`
+relativo. Como bucket não pode ter separador no nome, a regex sempre vê só
+`nome.enc.yaml`, sem barra nenhuma. Conferido com a regra do CI
+(`\.enc\.(yaml|yml|json|env)$`): `--filename-override x.enc.yaml` encripta, e
+`--filename-override x.txt` falha com `no matching creation rules found` (então a regra é
+mesmo aplicada). Uma regra que dependa de diretório (`^secrets/.*`, `/`) não casaria no
+Windows, porque o sops usa `\` ali; para o `sbox` ela não faz sentido de qualquer jeito.
+**Falta:** conferir com o `.sops.yaml` do cofre real do dono.
+
 ### T8. Finais de linha e encoding
 
 O parser que lê as chaves sem decriptar (`bucket.rs`) precisa aceitar CRLF, caso o
 bucket passe pelo Bloco de Notas ou por `git` com `autocrlf`. Saída no console em
 UTF-8 (`Console.OutputEncoding`) para acentos, emoji e as bolinhas do `show`.
+
+**Feito:** o `Bucket.Summarize` aceita CRLF. A saída não mexe no `Console.OutputEncoding`
+(isso mudaria a página de código do console de quem chamou): num console o texto vai em
+UTF-16 por `WriteConsoleW`; em pipe ou arquivo, bytes UTF-8 sem BOM e `\n` puro. Cores só
+quando a saída é um console, sem `NO_COLOR`, ligando `ENABLE_VIRTUAL_TERMINAL_PROCESSING`
+(e devolvendo o modo original ao sair).
 
 ### T9. Testes e distribuição
 
@@ -195,8 +336,42 @@ UTF-8 (`Console.OutputEncoding`) para acentos, emoji e as bolinhas do `show`.
   `sbox.exe` de verdade.
 - Sem terminal: no Unix, as confirmações (`del`, `rm`) leem do `/dev/tty`. O `sbox.exe`
   precisa responder "não" quando roda sem console, como nos testes `… sem terminal não apaga`.
+
+  **Decidido:** no Windows a confirmação só acontece quando **o próprio stdin é o console**
+  (`Console.IsInputRedirected` falso) **e** `CONIN$`/`CONOUT$` abrem; a pergunta vai para o
+  `CONOUT$` e a resposta vem do `CONIN$` por `ReadConsoleW` (em
+  [`Win32Terminal.cs`](src/Infrastructure/Win32Terminal.cs)). Em qualquer outro caso a resposta é "não", sem
+  perguntar. O motivo: a suíte roda o `sbox.exe` com o stdin vindo de um arquivo, mas
+  herdando o console do `prove`. Abrir o `CONIN$` direto, como o Rust faz com o
+  `/dev/tty`, funcionaria nesse caso, e o teste ficaria esperando quem roda a suíte num
+  console local digitar a resposta (no CI não há console, e passaria). Exigir o stdin no
+  console evita isso, e vale para qualquer script ou agente de IA que chame o `sbox` com
+  pipe. **Diferença em relação ao Unix:** lá, `echo | sbox del x` ainda pergunta pelo
+  `/dev/tty` quando há terminal; no Windows, responde "não" e quem quer apagar sem console
+  passa `-y`. `GetConsoleWindow` não serve como critério: ele diz se há uma janela de
+  console, não se quem chamou espera uma pergunta.
+
+  **Testável sem console:** as duas decisões ficam em funções puras em
+  [`ConfirmationRules.cs`](src/Domain/ConfirmationRules.cs): `CanAskInConsole` (stdin
+  redirecionado? console abriu?) e `IsAffirmative` (`s`, `sim`, `y`, `yes`, sem diferença de
+  maiúsculas e ignorando espaços nas pontas; `n`, vazio, qualquer outra coisa e nulo são
+  "não"). O `Win32Terminal` só coleta os fatos e o `TerminalConfirmation` liga as pontas.
+  Conferidas com 26 casos num projeto de rascunho fora do repositório (sem projeto de teste
+  com NuGet por enquanto: a suíte Perl é o contrato). O ramo interativo de verdade (digitar
+  num console) não dá para a suíte cobrir; roteiro manual:
+
+  ```powershell
+  $sbox = "$PWD\out\sbox.exe"; $v = Join-Path $env:TEMP "sbox-del-$(Get-Random)"; mkdir $v | Out-Null
+  Copy-Item "$env:USERPROFILE\secrets\.sops.yaml" $v; $env:SOPS_BOX_DIR = $v   # só a config pública
+  & $sbox new teste; & $sbox del teste; "código $LASTEXITCODE"   # s + Enter → "✓ bucket teste apagado", código 0
+  & $sbox new teste; & $sbox del teste; "código $LASTEXITCODE"   # n (ou só Enter) → "erro: cancelado", código 1; Ctrl+C → console intacto
+  & $sbox ls; Remove-Item -Recurse $v; Remove-Item Env:SOPS_BOX_DIR             # mostra "teste" (o do n), e limpa
+  ```
 - Job `windows-latest` no CI com sops + age descartável, `dotnet publish` e `prove tests/`.
-- Tamanho e tempo de início do NativeAOT.
+- Tamanho e tempo de início do NativeAOT. Com `ls`/`new`/`mv`/`del`: `sbox.exe` de
+  2.065.408 bytes (o esqueleto tinha 929.280; o salto é o `System.Diagnostics.Process`).
+  Com as camadas e a ACL do temporário: 2.292.736 bytes (~35 KB das camadas, ~150 KB do
+  `System.Security.AccessControl`).
 - `.exe` sem assinatura cai no SmartScreen/Defender: assinar, ou distribuir via
   `winget`/`scoop`.
 
@@ -207,7 +382,8 @@ UTF-8 (`Console.OutputEncoding`) para acentos, emoji e as bolinhas do `show`.
 1. ~~Esqueleto em C# e job `windows-latest` no CI.~~ Feito; com o esqueleto, quase toda a
    suíte falha, e o trabalho do port é deixá-la verde arquivo por arquivo (e crescer o
    `tests.txt`).
-2. Rodar **T1** e **T7** (no CI já há `sops` e `age` para Windows, ou instalar localmente):
-   são os que podem mudar o desenho.
-3. Primeiro alvo: `01-buckets.t` (`ls`, `new`, `mv`, `del`), que destrava o resto.
-4. Marcar os jobs de teste como obrigatórios na proteção da `main`.
+2. ~~Rodar **T1** e **T7**.~~ Feito: nenhum dos dois muda o desenho.
+3. ~~Primeiro alvo: `01-buckets.t` (`ls`, `new`, `mv`, `del`).~~ Feito.
+4. Próximo: `set`/`get`/`show -r`/`rm` com o `json.rs` portado (`02-secrets.t`,
+   `07-json.t` e o que falta do `06-errors.t`), depois `encrypt` (`05-plaintext.t`).
+5. Marcar os jobs de teste como obrigatórios na proteção da `main`.

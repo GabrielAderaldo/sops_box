@@ -13,6 +13,15 @@ adota o [Versionamento Semântico](https://semver.org/lang/pt-BR/).
   própria (0.1.0): por enquanto só `--version` e `--help`. Novo job de CI
   "Testes de contrato (Windows)" que publica o `sbox.exe` e roda a suíte em Perl contra ele;
   os arquivos de `windows/tests.txt` são obrigatórios e o resto sai como relatório do port.
+- Versão Windows: `ls`, `new`, `mv`, `del` e `show` (sem `-r`), com `01-buckets.t` verde e
+  obrigatório no CI. O parser de argumentos foi portado inteiro; os comandos que faltam
+  saem com "ainda não implementado no Windows". O `new` continua sem gravar texto puro: no
+  Windows o `sops encrypt` recebe o YAML pelo stdin sem argumento de arquivo. Sem `-y`, o
+  `del` só pergunta quando o stdin é o console; com o stdin redirecionado, a resposta é "não".
+- Versão Windows organizada em camadas (`Domain`, `Application`, `Presentation`,
+  `Infrastructure`), com um caso de uso por comando e as dependências apontando só para
+  dentro. O bucket criado pelo `new` nasce com ACL só do usuário atual (o `0600` do Rust),
+  inclusive dentro do OneDrive, e o Ctrl+C devolve o modo original do console.
 
 ### Mudado
 
