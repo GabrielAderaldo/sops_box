@@ -15,7 +15,8 @@ internal static partial class Kernel32
     internal const int StandardOutputHandle = -11;
     internal const int StandardErrorHandle = -12;
 
-    internal const uint EnableVirtualTerminalProcessing = 0x0004;
+    internal const uint EnableVirtualTerminalProcessing = 0x0004; // modo de saída
+    internal const uint EnableEchoInput = 0x0004;                 // modo de entrada
 
     internal const uint GenericRead = 0x8000_0000;
     internal const uint GenericWrite = 0x4000_0000;
@@ -35,6 +36,14 @@ internal static partial class Kernel32
     [LibraryImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static partial bool SetConsoleMode(nint consoleHandle, uint mode);
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool GetConsoleMode(SafeFileHandle consoleHandle, out uint mode);
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool SetConsoleMode(SafeFileHandle consoleHandle, uint mode);
 
     /// Escreve UTF-16 direto no console, sem passar pela página de código (850, 1252…) dele.
     [LibraryImport("kernel32.dll", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]

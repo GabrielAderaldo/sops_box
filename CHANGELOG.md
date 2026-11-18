@@ -22,6 +22,12 @@ adota o [Versionamento Semântico](https://semver.org/lang/pt-BR/).
   `Infrastructure`), com um caso de uso por comando e as dependências apontando só para
   dentro. O bucket criado pelo `new` nasce com ACL só do usuário atual (o `0600` do Rust),
   inclusive dentro do OneDrive, e o Ctrl+C devolve o modo original do console.
+- Versão Windows: `set`, `get` (sem `-c`), `show -r`, `rm` e `encrypt`, com `02-secrets.t`,
+  `05-plaintext.t`, `06-errors.t` e `07-json.t` verdes e obrigatórios no CI. O valor vai ao
+  sops só pelo stdin. A pergunta escondida desliga o eco e o devolve no fim e no Ctrl+C. No
+  `set` pelo stdin, o Windows também descarta o `\r` do `\r\n` numa linha só e um BOM UTF-8
+  no começo (o PowerShell manda o BOM no pipe), para o segredo não ganhar caractere
+  invisível.
 
 ### Mudado
 

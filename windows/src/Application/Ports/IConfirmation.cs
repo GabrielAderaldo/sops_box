@@ -17,4 +17,6 @@ internal interface IConfirmation
 internal abstract record ConfirmationRequest
 {
     public sealed record DeleteBucket(BucketName Bucket, int KeyCount) : ConfirmationRequest;
+
+    public sealed record RemoveSecret(string Key, BucketName Bucket) : ConfirmationRequest;
 }
