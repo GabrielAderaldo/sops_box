@@ -1,0 +1,175 @@
+# `sbox` para Windows — hipóteses
+
+Rascunho para decidir **como** ter o `sbox` no Windows. Cada hipótese termina com o que
+precisa ser verdade para ela valer e como testar.
+
+## Decidido
+
+- **Caminho: H1.** Port em C# (.NET 10, NativeAOT), aqui em `windows/`. As duas versões
+  podem divergir em detalhes internos.
+- **Contrato: a suíte em Perl ([`tests/*.t`](../tests)).** É a mesma para as duas versões.
+  Ela só olha a linha de comando, stdin, stdout, stderr e o código de saída, então vale para
+  qualquer implementação. Perl 5 em vez de Raku: já vem no Ubuntu, no macOS, nos runners
+  Windows do GitHub (Strawberry Perl) e no Git Bash, e a suíte usa só módulos do core.
+- **PR válido = suíte verde.** O CI roda a suíte contra o binário Rust (Linux) e, quando o
+  port existir, contra o `sbox.exe` (Windows). Os dois jobs viram checagens obrigatórias
+  na proteção da `main`.
+- O que só existe numa plataforma fica atrás de `IS_WINDOWS`/`IS_LINUX`/`IS_MACOS` na suíte,
+  sempre com o motivo. Ex.: `03-dialog.t` pula no Windows, porque a janela do Windows é uma
+  API (CredUI) e não um programa que dê para trocar por um falso no `PATH`.
+
+Ambiente desta máquina (2026-11-17): .NET SDK 10 e 11 instalados; `sops`, `age` e
+`cargo` ainda não.
+
+## O que precisa continuar valendo
+
+As garantias do [`ARCHITECTURE.md`](../docs/ARCHITECTURE.md#garantias-invariantes). As que
+dependem de Unix hoje:
+
+| # | garantia | depende de |
+|---|---|---|
+| 2 | texto puro nunca no disco | `sops encrypt … /dev/stdin` |
+| 5 | clipboard limpo só se ainda tiver o segredo | `sh` + `sha256sum` soltos |
+| 6 | terminal nunca fica sem eco | `/dev/tty`, `termios`, `SIGINT` |
+| 7 | nunca sobrescrever | `link()` + temporário `0600` |
+| 11 | `run` sem processo intermediário | `exec` |
+
+O resto (argumentos, leitura do YAML, JSON, chamadas ao sops, mensagens) é lógica pura.
+
+---
+
+## Parte 1 — Hipóteses de caminho
+
+### H1. Port em C# (.NET 10, NativeAOT), código separado em `windows/`
+
+Reescrever os ~2.000 linhas em C#, um `sbox.exe` único e sem runtime, **sem NuGet**
+(só BCL + P/Invoke), mantendo os mesmos nomes de tipos (`Vault`, `Bucket`, `Sops`,
+`FileManager`, `Pasteboard`…) para a leitura lado a lado com o Rust.
+
+- **A favor:** P/Invoke para Win32 é natural em C#; NativeAOT dá binário único;
+  quem só conhece C# consegue contribuir na versão Windows.
+- **Contra:** duas bases para manter. Todo comando, flag ou mensagem nova tem que ser
+  feito duas vezes, e as duas podem divergir.
+- **Vale se:** o NativeAOT gerar um `.exe` pequeno e rápido, e a suíte de contrato
+  conseguir rodar contra os dois binários.
+
+### H2. Mesmo código Rust, com `#[cfg(windows)]` nos módulos de plataforma
+
+O Rust compila para Windows. Parte já é portável: `fs::hard_link` usa `CreateHardLinkW`
+e também falha se o destino existe. Só `console.rs`, `pasteboard.rs`, `dialog.rs`,
+`process.rs` (o `exec`) e o `.mode(0o600)` do `file_manager.rs` precisariam de uma
+variante Windows.
+
+- **A favor:** uma base só; os testes já existem; menos de ~500 linhas novas.
+- **Contra:** precisa da crate `windows-sys` ou de FFI à mão (o projeto evita dependências);
+  não é C#.
+- **Vale se:** a regra "só `libc`" aceitar uma exceção para Windows, ou se o FFI à mão
+  ficar pequeno.
+
+### H3. Módulo PowerShell em cima do `sops`
+
+Um `sbox.psm1` com `Get-SboxSecret`, `Set-SboxSecret`, `Invoke-Sbox` etc. chamando o
+`sops.exe`.
+
+- **A favor:** zero compilação; é o "idioma" do Windows; pronto em um dia.
+- **Contra:** comandos diferentes do `sbox` do Linux/macOS; difícil manter as garantias
+  (o PowerShell guarda strings na memória e no histórico; clipboard sem as marcas de
+  privacidade sem P/Invoke).
+- **Vale se:** o objetivo for só uso pessoal rápido, não paridade.
+
+### H4. H1 + extensão do SecretManagement (fase 2)
+
+O mesmo núcleo em C# exposto também como *vault extension* do
+`Microsoft.PowerShell.SecretManagement`. Aí `Get-Secret -Vault sbox GITHUB_TOKEN` lê do
+mesmo cofre sops que o `sbox.exe`.
+
+- **A favor:** integra com o que o Windows/PowerShell já usa; o cofre continua portátil.
+- **Contra:** mais superfície; só faz sentido depois de H1 estar sólida.
+
+**Escolhida:** H1, com a suíte de contrato em Perl rodando contra o `sbox.exe`.
+
+---
+
+## Parte 2 — Hipóteses técnicas (valem para H1 e H2)
+
+Cada uma é um experimento pequeno, para fazer antes de escrever o port.
+
+### T1. O `sops` no Windows encripta a partir do stdin *(bloqueante, garantia 2)*
+
+`/dev/stdin` não existe no Windows. Testar com o `sops.exe`:
+`sops encrypt --input-type yaml --output-type yaml --filename-override x.enc.yaml` com o
+YAML no stdin, variando o último argumento (`-`, nenhum, `CON`, `\\.\pipe\…`).
+**Se nenhum funcionar:** gravar o texto puro num arquivo temporário (garantia 2 cai) ou
+criar o bucket por `sops set` em cima de um arquivo já encriptado vazio. Decidir antes
+de começar.
+
+### T2. "Nunca sobrescrever" sobrevive (garantia 7)
+
+`File.Move(origem, destino, overwrite: false)` (= `MoveFileExW` sem
+`MOVEFILE_REPLACE_EXISTING`) e `CreateHardLinkW` falham se o destino existe.
+Temporário com `FileMode.CreateNew`, `FileShare.None`, ACL só do usuário atual, e
+`Flush(flushToDisk: true)` no lugar do `fsync`. Testar em NTFS e numa pasta do OneDrive
+(o `%USERPROFILE%` costuma estar sincronizado).
+
+### T3. Clipboard privado e com limpeza (garantia 5)
+
+`SetClipboardData` com os formatos `ExcludeClipboardContentFromMonitorProcessing`,
+`CanIncludeInClipboardHistory = 0` e `CanUploadToCloudClipboard = 0`. Verificar que o
+valor **não** aparece no Win+V nem sincroniza. Limpeza: o próprio `sbox.exe` relançado
+em segundo plano (`sbox __clear-clipboard`, hash SHA-256 pelo stdin), que só limpa se o
+conteúdo atual ainda tiver o mesmo hash.
+
+### T4. Pergunta escondida e terminal sempre restaurado (garantia 6)
+
+Abrir `CONIN$` (equivalente ao `/dev/tty`: funciona com stdin redirecionado), desligar
+`ENABLE_ECHO_INPUT` com `SetConsoleMode` e religar no `finally` e no `Console.CancelKeyPress`.
+Sem console (ex.: agente de IA) → confirmações respondem "não", como hoje.
+
+### T5. `run` sem `exec` (garantia 11 — não dá para manter igual)
+
+O Windows não tem `exec`. Proposta: processo filho com o ambiente montado, num Job
+Object com `KILL_ON_JOB_CLOSE`; o `sbox` ignora o Ctrl+C (o filho recebe do console) e
+sai com o código do filho. O segredo fica na memória do `sbox` enquanto o comando roda,
+e strings do .NET não podem ser zeradas. **Documentar no `SECURITY.md`.**
+Testar: código de saída repassado, Ctrl+C, `sbox run x -- cmd /c echo %TOKEN%`.
+
+### T6. `set --dialog` com janela nativa
+
+`CredUIPromptForWindowsCredentialsW` (janela do sistema, sem processo externo). Testar
+se aceita só um campo de "senha" e se funciona sem console.
+
+### T7. `path_regex` do `.sops.yaml` com caminhos do Windows
+
+O sops casa o `path_regex` com o caminho do arquivo. Regras escritas com `/` podem não
+casar com `C:\Users\…\secrets\x.enc.yaml`. Testar com o `.sops.yaml` do cofre real
+antes de qualquer coisa; afeta a interoperabilidade entre máquinas.
+
+### T8. Finais de linha e encoding
+
+O parser que lê as chaves sem decriptar (`bucket.rs`) precisa aceitar CRLF, caso o
+bucket passe pelo Bloco de Notas ou por `git` com `autocrlf`. Saída no console em
+UTF-8 (`Console.OutputEncoding`) para acentos, emoji e as bolinhas do `show`.
+
+### T9. Testes e distribuição
+
+- ~~A suíte roda no Windows?~~ A biblioteca `tests/lib/Sbox/Test.pm` já foi conferida no
+  Strawberry Perl: argumentos com aspas, barras, vazios e `%PATH%` chegam intactos, o
+  stdin/stdout são byte a byte e as ferramentas falsas viram `.cmd`. Falta rodar contra um
+  `sbox.exe` de verdade.
+- Sem terminal: no Unix, as confirmações (`del`, `rm`) leem do `/dev/tty`. O `sbox.exe`
+  precisa responder "não" quando roda sem console, como nos testes `… sem terminal não apaga`.
+- Job `windows-latest` no CI com sops + age descartável, `dotnet publish` e `prove tests/`.
+- Tamanho e tempo de início do NativeAOT.
+- `.exe` sem assinatura cai no SmartScreen/Defender: assinar, ou distribuir via
+  `winget`/`scoop`.
+
+---
+
+## Próximo passo sugerido
+
+1. Instalar `sops` e `age` para Windows (releases oficiais no GitHub, ou `winget`/`scoop`).
+2. Rodar **T1** e **T7**: são os que podem mudar o desenho.
+3. Esqueleto em C# (`windows/Sbox.csproj`) e job `windows-latest` no CI rodando
+   `prove tests/`. Com o esqueleto, quase tudo falha, e o trabalho do port é deixar a
+   suíte verde arquivo por arquivo.
+4. Marcar os jobs de teste como obrigatórios na proteção da `main`.
