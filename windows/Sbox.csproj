@@ -26,6 +26,12 @@ SPDX-License-Identifier: AGPL-3.0-or-later
     <PublishAot>true</PublishAot>
     <IsAotCompatible>true</IsAotCompatible>
     <InvariantGlobalization>true</InvariantGlobalization>
+
+    <!--
+      O [LibraryImport] gera o marshalling em tempo de compilação e, para strings e ponteiros,
+      precisa de código unsafe. Fica restrito a src/Interop e ao ReadConsoleW do Terminal.cs.
+    -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <!--
