@@ -4,6 +4,8 @@
 # Ao deixar um arquivo verde, adicione-o aqui no mesmo commit. Nunca tire um arquivo da lista
 # para "consertar" o CI. Um arquivo pulado inteiro (skip_all) conta como passando.
 
+# ls, new, mv, del e show de bucket inexistente.
+01-buckets.t
 # Pulado no Windows: a janela (CredUI) é API, não programa trocável no PATH.
 03-dialog.t
 # Ainda passa sem nada implementado (nada é gravado, então nada vaza), mas fica aqui como

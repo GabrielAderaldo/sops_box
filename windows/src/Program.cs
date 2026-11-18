@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 // sbox — gerencia um cofre sops (%USERPROFILE%\secrets) sem digitar `sops` na mão
-// (espelho de src/main.rs). Por enquanto só o parser: todos os comandos são reconhecidos,
-// --help e --version funcionam, e o resto sai com "ainda não implementado no Windows".
+// (espelho de src/main.rs). Só dois conceitos: bucket = arquivo `*.enc.yaml`;
+// secret = uma linha `CHAVE: valor` dentro dele.
 
 namespace Sbox;
 
@@ -18,13 +18,16 @@ internal static class Program
             {
                 case Command.ShowHelp:
                     Terminal.PrintLine(CommandLine.Usage);
-                    return 0;
+                    break;
                 case Command.ShowVersion:
                     Terminal.PrintLine($"sbox {BuildInfo.Version}");
-                    return 0;
+                    break;
                 default:
-                    throw SboxError.NotYetImplemented(arguments.Length > 0 ? arguments[0] : "");
+                    Vault vault = Vault.Locate(invocation.VaultDirectory);
+                    SboxCommands.Open(vault).Run(invocation.Command);
+                    break;
             }
+            return 0;
         }
         catch (SboxError error)
         {
