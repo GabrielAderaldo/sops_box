@@ -18,8 +18,33 @@ precisa ser verdade para ela valer e como testar.
   sempre com o motivo. Ex.: `03-dialog.t` pula no Windows, porque a janela do Windows é uma
   API (CredUI) e não um programa que dê para trocar por um falso no `PATH`.
 
+- **Esqueleto feito.** [`Sbox.csproj`](Sbox.csproj) (.NET 10, NativeAOT, sem NuGet, avisos
+  como erro, versão própria `0.1.0`) e [`src/Program.cs`](src/Program.cs): `--version` e
+  `--help` funcionam; qualquer outro comando sai com 1 e
+  `erro: … ainda não implementado no Windows`. O [`global.json`](global.json) fixa o SDK 10.
+- **[`tests.txt`](tests.txt) é a régua do port.** Lista os arquivos da suíte que já precisam
+  passar contra o `sbox.exe`. O job "Testes de contrato (Windows)" do CI publica o binário
+  (NativeAOT), cria um cofre com chave age descartável, roda esses arquivos de forma
+  obrigatória e a suíte inteira só como relatório. Ao deixar um arquivo verde, ele entra na
+  lista no mesmo commit; nunca sai dela.
+
 Ambiente desta máquina (2026-11-17): .NET SDK 10 e 11 instalados; `sops`, `age` e
-`cargo` ainda não.
+`cargo` ainda não. O `dotnet publish` com NativeAOT falha aqui (o `link.exe` do Visual
+Studio não é achado, sem `vswhere.exe` no PATH); o CI é quem confere o binário nativo.
+
+### Rodar localmente
+
+```powershell
+dotnet build windows/Sbox.csproj                      # rápido, sem AOT
+dotnet publish windows/Sbox.csproj -c Release -r win-x64 -o out   # sbox.exe nativo
+$env:SBOX_BIN = "$PWD\out\sbox.exe"   # ou windows\bin\Debug\net10.0\sbox.exe
+$env:SBOX_EXPECTED_VERSION = '0.1.0'
+prove -v tests/06-errors.t                            # um arquivo só
+prove tests/                                          # a suíte inteira
+```
+
+A suíte precisa de um `.sops.yaml` em `%USERPROFILE%\secrets` (ou `SBOX_TEST_SOPS_CONFIG`)
+e, para os testes que gravam de verdade, de `sops` e `age` no PATH.
 
 ## O que precisa continuar valendo
 
@@ -167,9 +192,10 @@ UTF-8 (`Console.OutputEncoding`) para acentos, emoji e as bolinhas do `show`.
 
 ## Próximo passo sugerido
 
-1. Instalar `sops` e `age` para Windows (releases oficiais no GitHub, ou `winget`/`scoop`).
-2. Rodar **T1** e **T7**: são os que podem mudar o desenho.
-3. Esqueleto em C# (`windows/Sbox.csproj`) e job `windows-latest` no CI rodando
-   `prove tests/`. Com o esqueleto, quase tudo falha, e o trabalho do port é deixar a
-   suíte verde arquivo por arquivo.
+1. ~~Esqueleto em C# e job `windows-latest` no CI.~~ Feito; com o esqueleto, quase toda a
+   suíte falha, e o trabalho do port é deixá-la verde arquivo por arquivo (e crescer o
+   `tests.txt`).
+2. Rodar **T1** e **T7** (no CI já há `sops` e `age` para Windows, ou instalar localmente):
+   são os que podem mudar o desenho.
+3. Primeiro alvo: `01-buckets.t` (`ls`, `new`, `mv`, `del`), que destrava o resto.
 4. Marcar os jobs de teste como obrigatórios na proteção da `main`.

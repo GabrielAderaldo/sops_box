@@ -19,6 +19,8 @@ env:
   AGE_VERSION: v1.3.2
   # O age não publica checksums; este é o SHA-256 do pacote linux-amd64 da versão acima.
   AGE_SHA256: cbe24006683f8eb669266162894b9a522a1af52f2665fbc63a4bb032ed26ac10
+  # Idem, do pacote windows-amd64 (bate com o digest que o GitHub mostra no release).
+  AGE_SHA256_WINDOWS: f48d8f8f9ebe903ab5027ed067652f2cc1db94bc206976430133b905dcd8e8c7
 
 jobs:
   lint:
@@ -85,6 +87,94 @@ jobs:
             "$(age-keygen -y ~/.config/sops/age/keys.txt)" > ~/secrets/.sops.yaml
 
       - run: make test
+
+  test-windows:
+    # A mesma suíte contra o sbox.exe (C#, windows/). Só os arquivos listados em
+    # windows/tests.txt são obrigatórios; a suíte inteira roda como relatório do port.
+    name: Testes de contrato (Windows)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Instalar sops e age (com checksum conferido)
+        working-directory: ${{ runner.temp }}
+        run: |
+          function Confirm-Sha256($file, $expected) {
+            $actual = (Get-FileHash $file -Algorithm SHA256).Hash
+            if (-not $expected -or $actual -ne $expected) { throw "checksum de ${file}: esperava [$expected], veio [$actual]" }
+            "${file}: OK"
+          }
+          $bin = New-Item -ItemType Directory -Force (Join-Path $env:RUNNER_TEMP 'bin')
+
+          $base = "https://github.com/getsops/sops/releases/download/$env:SOPS_VERSION"
+          $sops = "sops-$env:SOPS_VERSION.amd64.exe"
+          Invoke-WebRequest "$base/$sops" -OutFile $sops
+          Invoke-WebRequest "$base/sops-$env:SOPS_VERSION.checksums.txt" -OutFile sops-checksums.txt
+          $line = Get-Content sops-checksums.txt | Where-Object { ($_ -split '\s+')[1] -eq $sops }
+          Confirm-Sha256 $sops (($line -split '\s+')[0])
+          Move-Item $sops (Join-Path $bin 'sops.exe')
+
+          Invoke-WebRequest "https://github.com/FiloSottile/age/releases/download/$env:AGE_VERSION/age-$env:AGE_VERSION-windows-amd64.zip" -OutFile age.zip
+          Confirm-Sha256 age.zip $env:AGE_SHA256_WINDOWS
+          Expand-Archive age.zip -DestinationPath age-zip
+          Move-Item age-zip/age/age.exe, age-zip/age/age-keygen.exe $bin
+
+          $bin.FullName >> $env:GITHUB_PATH
+          & (Join-Path $bin 'sops.exe') --version
+          & (Join-Path $bin 'age.exe') --version
+
+      - name: Criar cofre com chave age descartável
+        run: |
+          # O sops acha a chave pelo SOPS_AGE_KEY_FILE; o cofre fica onde o sbox procura (~\secrets).
+          $keys = Join-Path $env:RUNNER_TEMP 'age-keys.txt'
+          age-keygen -o $keys 2>$null
+          $secrets = New-Item -ItemType Directory -Force (Join-Path $env:USERPROFILE 'secrets')
+          $config = Join-Path $secrets '.sops.yaml'
+          $rules = 'creation_rules:', '  - path_regex: \.enc\.(yaml|yml|json|env)$', "    age: $(age-keygen -y $keys)", ''
+          [IO.File]::WriteAllText($config, ($rules -join "`n"))
+          "SOPS_AGE_KEY_FILE=$keys" >> $env:GITHUB_ENV
+          "SBOX_TEST_SOPS_CONFIG=$config" >> $env:GITHUB_ENV
+
+      - name: Publicar sbox.exe (NativeAOT)
+        id: publish
+        run: |
+          $out = Join-Path $env:RUNNER_TEMP 'sbox'
+          dotnet publish windows/Sbox.csproj -c Release -r win-x64 -o $out
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $exe = Get-Item (Join-Path $out 'sbox.exe')
+          '{0}: {1:N0} bytes' -f $exe.Name, $exe.Length
+          # A versão Windows é independente da do Rust: vem do <Version> do csproj.
+          $version = (Select-Xml -Path windows/Sbox.csproj -XPath '//Version').Node.InnerText
+          "SBOX_BIN=$($exe.FullName)" >> $env:GITHUB_ENV
+          "SBOX_EXPECTED_VERSION=$version" >> $env:GITHUB_ENV
+
+      - name: Suíte obrigatória (windows/tests.txt)
+        run: |
+          $version = & $env:SBOX_BIN --version
+          if ($LASTEXITCODE -or $version -cne "sbox $env:SBOX_EXPECTED_VERSION") {
+            throw "--version: esperava [sbox $env:SBOX_EXPECTED_VERSION], veio [$version] (código $LASTEXITCODE)"
+          }
+          "--version: $version"
+          $tests = @(Get-Content windows/tests.txt | ForEach-Object { ($_ -replace '#.*', '').Trim() } |
+            Where-Object { $_ } | ForEach-Object { "tests/$_" })
+          if (-not $tests) { 'windows/tests.txt vazio: só o --version foi conferido.'; exit 0 }
+          prove $tests
+          exit $LASTEXITCODE
+
+      - name: Relatório do port (suíte inteira, não bloqueia)
+        if: ${{ !cancelled() && steps.publish.outcome == 'success' }}
+        continue-on-error: true
+        run: |
+          prove tests/
+          exit $LASTEXITCODE
 
   dependencies:
     name: Dependências (licenças e RustSec)

@@ -105,6 +105,23 @@ Comportamento que só existe numa plataforma fica atrás de `IS_LINUX`, `IS_MACO
 
 Correções de bug devem vir com um teste que falha antes da correção.
 
+### Versão Windows (C#)
+
+O port para Windows mora em [`windows/`](windows): .NET 10, NativeAOT e sem NuGet (só BCL e
+P/Invoke). A versão dele é a do `<Version>` em `windows/Sbox.csproj`, independente da do
+`Cargo.toml`. Com o .NET SDK 10, `sops`, `age` e Perl (Strawberry Perl):
+
+```powershell
+dotnet publish windows/Sbox.csproj -c Release -r win-x64 -o out
+$env:SBOX_BIN = "$PWD\out\sbox.exe"; $env:SBOX_EXPECTED_VERSION = '0.1.0'
+prove tests/
+```
+
+[`windows/tests.txt`](windows/tests.txt) lista os arquivos da suíte que já precisam passar no
+Windows: o CI roda esses de forma obrigatória e o resto só como relatório. Ao deixar um
+arquivo verde, adicione-o à lista no mesmo commit; nunca tire um arquivo de lá para
+"consertar" o CI.
+
 ## Mensagens de commit
 
 Use [Conventional Commits](https://www.conventionalcommits.org/pt-br/), em português:

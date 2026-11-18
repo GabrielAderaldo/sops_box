@@ -1,0 +1,49 @@
+<!--
+SPDX-FileCopyrightText: 2026 Gabriel Vieira Soriano Aderaldo
+SPDX-License-Identifier: AGPL-3.0-or-later
+-->
+<!--
+  sbox para Windows: um sbox.exe único, sem runtime (NativeAOT) e sem NuGet (só BCL + P/Invoke),
+  porque cada dependência é uma cadeia de suprimentos a mais num programa que manipula segredos.
+  A versão é independente da do Rust (Cargo.toml); o CI lê o <Version> daqui para conferir o `sbox -V`.
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>sbox</AssemblyName>
+    <RootNamespace>Sbox</RootNamespace>
+    <Version>0.1.0</Version>
+
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+
+    <!-- Binário nativo único. Avisos de trimming/AOT viram erro pelo TreatWarningsAsErrors. -->
+    <PublishAot>true</PublishAot>
+    <IsAotCompatible>true</IsAotCompatible>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <!--
+    A versão vira uma constante (Sbox.BuildInfo.Version) gerada daqui, como o env!("CARGO_PKG_VERSION")
+    do Rust: uma fonte só para o número e nada de ler atributos do assembly por reflection.
+  -->
+  <Target Name="GenerateBuildInfo" BeforeTargets="BeforeCompile">
+    <PropertyGroup>
+      <BuildInfoFile>$(IntermediateOutputPath)BuildInfo.g.cs</BuildInfoFile>
+    </PropertyGroup>
+    <WriteLinesToFile File="$(BuildInfoFile)"
+                      Lines="// &lt;auto-generated /&gt;;namespace Sbox%3B;internal static class BuildInfo { public const string Version = &quot;$(Version)&quot;%3B }"
+                      Overwrite="true"
+                      WriteOnlyWhenDifferent="true" />
+    <ItemGroup>
+      <Compile Include="$(BuildInfoFile)" />
+      <FileWrites Include="$(BuildInfoFile)" />
+    </ItemGroup>
+  </Target>
+
+</Project>

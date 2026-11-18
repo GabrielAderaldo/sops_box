@@ -1,2 +1,4 @@
 /target/
 /.claude/
+/windows/bin/
+/windows/obj/

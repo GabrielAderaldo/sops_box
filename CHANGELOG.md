@@ -7,6 +7,13 @@ adota o [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
+### Adicionado
+
+- Esqueleto da versão Windows em C# (`windows/`, .NET 10, NativeAOT, sem NuGet), com versão
+  própria (0.1.0): por enquanto só `--version` e `--help`. Novo job de CI
+  "Testes de contrato (Windows)" que publica o `sbox.exe` e roda a suíte em Perl contra ele;
+  os arquivos de `windows/tests.txt` são obrigatórios e o resto sai como relatório do port.
+
 ### Mudado
 
 - A suíte de ponta a ponta saiu do `tests/tests.sh` (bash) para `tests/*.t` em Perl 5, só com
