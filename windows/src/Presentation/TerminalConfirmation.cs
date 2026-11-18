@@ -13,5 +13,5 @@ namespace Sbox.Presentation;
 internal sealed class TerminalConfirmation(ITerminal terminal) : IConfirmation
 {
     public bool Confirm(ConfirmationRequest request) =>
-        ConfirmationRules.IsAffirmative(terminal.AskLine(Presenter.Question(request)));
+        PromptRules.IsAffirmative(terminal.AskLine(Presenter.Question(request)));
 }

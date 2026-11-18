@@ -12,6 +12,7 @@
 using System;
 using System.IO;
 using System.Text;
+using System.Threading;
 using Microsoft.Win32.SafeHandles;
 using Sbox.Application.Ports;
 using Sbox.Domain;
@@ -26,11 +27,16 @@ internal sealed class Win32Terminal : ITerminal
     private readonly OutputChannel standardOutput = new(Kernel32.StandardOutputHandle);
     private readonly OutputChannel standardError = new(Kernel32.StandardErrorHandle);
 
-    /// Ctrl+C em qualquer ponto (inclusive no meio da pergunta s/N) devolve o modo original do
-    /// console antes de o processo morrer: o console é do shell de quem chamou, e ele não pode
-    /// ficar com o modo que o sbox ligou. A pergunta s/N não desliga o eco (a resposta aparece
-    /// ao digitar), então não há eco a religar aqui; a pergunta escondida do `set` (T4) vai
-    /// registrar o modo de entrada neste mesmo ponto.
+    // O console cujo eco está desligado agora, e o modo a devolver. Estado do objeto só para o
+    // handler do Ctrl+C (que roda em outra thread) conseguir religar o eco: um Ctrl+C no meio
+    // da pergunta escondida não pode deixar o console do usuário mudo (garantia 6).
+    private readonly Lock silencedInputLock = new();
+    private SafeFileHandle? silencedInput;
+    private uint originalInputMode;
+
+    /// Ctrl+C em qualquer ponto devolve o eco e o modo original do console antes de o processo
+    /// morrer: o console é do shell de quem chamou, e ele não pode ficar com o modo que o sbox
+    /// mudou.
     public Win32Terminal()
     {
         Console.CancelKeyPress += (_, _) => RestoreConsoleModes();
@@ -40,11 +46,32 @@ internal sealed class Win32Terminal : ITerminal
 
     public bool SupportsColor(TerminalStream stream) => Channel(stream).SupportsColor;
 
+    public string? AskLine(string prompt) => Ask(prompt, hidden: false);
+
+    public string? AskHiddenLine(string prompt) => Ask(prompt, hidden: true);
+
+    public byte[] ReadStandardInput()
+    {
+        using Stream input = Console.OpenStandardInput();
+        using MemoryStream buffer = new();
+        input.CopyTo(buffer);
+        return buffer.ToArray();
+    }
+
+    /// Devolve o eco (se uma pergunta escondida estiver no meio) e o modo original dos consoles
+    /// em que ligamos as cores (o console é compartilhado com o shell que chamou o sbox).
+    public void RestoreConsoleModes()
+    {
+        RestoreEcho();
+        standardOutput.RestoreMode();
+        standardError.RestoreMode();
+    }
+
     /// No Unix a pergunta vai pelo `/dev/tty`, mesmo com o stdin redirecionado. No Windows
     /// ela só acontece se o próprio stdin for o console: com o stdin vindo de pipe ou arquivo
     /// (um script, um agente de IA, a suíte de testes), não há a quem perguntar. Assim
     /// ninguém fica preso numa pergunta que não pediu.
-    public string? AskLine(string prompt)
+    private string? Ask(string prompt, bool hidden)
     {
         bool standardInputIsRedirected = Console.IsInputRedirected;
         if (standardInputIsRedirected)
@@ -53,7 +80,7 @@ internal sealed class Win32Terminal : ITerminal
         }
         using SafeFileHandle input = OpenConsole("CONIN$");
         using SafeFileHandle output = OpenConsole("CONOUT$");
-        if (!ConfirmationRules.CanAskInConsole(standardInputIsRedirected, !input.IsInvalid && !output.IsInvalid))
+        if (!PromptRules.CanAskInConsole(standardInputIsRedirected, !input.IsInvalid && !output.IsInvalid))
         {
             return null;
         }
@@ -61,15 +88,53 @@ internal sealed class Win32Terminal : ITerminal
         {
             return null;
         }
-        return ReadConsoleLine(input);
+        if (!hidden)
+        {
+            return ReadConsoleLine(input);
+        }
+
+        if (!SilenceEcho(input))
+        {
+            return null; // sem desligar o eco, não pergunta segredo nenhum
+        }
+        try
+        {
+            return ReadConsoleLine(input);
+        }
+        finally
+        {
+            RestoreEcho();
+            // O Enter não foi ecoado: a próxima saída começa numa linha nova.
+            Kernel32.WriteConsoleW(output, "\n", 1, out _, 0);
+        }
     }
 
-    /// Devolve o modo original dos consoles em que ligamos as cores (o console é
-    /// compartilhado com o shell que chamou o sbox).
-    public void RestoreConsoleModes()
+    /// Desliga só o eco; o modo de linha e o Ctrl+C continuam como estavam.
+    private bool SilenceEcho(SafeFileHandle input)
     {
-        standardOutput.RestoreMode();
-        standardError.RestoreMode();
+        lock (silencedInputLock)
+        {
+            if (!Kernel32.GetConsoleMode(input, out uint mode)
+                || !Kernel32.SetConsoleMode(input, mode & ~Kernel32.EnableEchoInput))
+            {
+                return false;
+            }
+            silencedInput = input;
+            originalInputMode = mode;
+            return true;
+        }
+    }
+
+    private void RestoreEcho()
+    {
+        lock (silencedInputLock)
+        {
+            if (silencedInput is { IsClosed: false } input)
+            {
+                Kernel32.SetConsoleMode(input, originalInputMode);
+            }
+            silencedInput = null;
+        }
     }
 
     private OutputChannel Channel(TerminalStream stream) =>

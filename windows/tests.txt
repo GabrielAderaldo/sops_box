@@ -6,6 +6,14 @@
 
 # ls, new, mv, del e show de bucket inexistente.
 01-buckets.t
+# set, get, show -r e rm, com valores difíceis.
+02-secrets.t
+# Bucket em texto puro recusado; encrypt.
+05-plaintext.t
+# Erros de linha de comando, de cofre e do sops.
+06-errors.t
+# Parser JSON contra um sops falso.
+07-json.t
 # Pulado no Windows: a janela (CredUI) é API, não programa trocável no PATH.
 03-dialog.t
 # Ainda passa sem nada implementado (nada é gravado, então nada vaza), mas fica aqui como

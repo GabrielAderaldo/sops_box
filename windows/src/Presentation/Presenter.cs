@@ -70,6 +70,38 @@ internal sealed class Presenter(ITerminal terminal)
         PrintTable(bucket.Summary.Keys.Select(key => (key, Paint(Style.Secondary, MaskedValue))).ToList());
     }
 
+    /// `show -r`: valor multilinha numa linha só, para não quebrar a tabela (o `get` devolve
+    /// o original).
+    public void BucketSecrets(IReadOnlyList<Secret> secrets)
+    {
+        string lineBreak = Paint(Style.Secondary, "⏎");
+        PrintTable(secrets.Select(secret => (secret.Key, secret.Value.Text.Replace("\n", lineBreak))).ToList());
+    }
+
+    /// `get`: num console, o valor e uma quebra de linha; em pipe ou arquivo, os bytes exatos,
+    /// sem `\n` extra (o Rust decide pelo mesmo critério das cores).
+    public void SecretValueOutput(SecretValue value) =>
+        terminal.Write(
+            TerminalStream.StandardOutput,
+            terminal.SupportsColor(TerminalStream.StandardOutput) ? value.Text + "\n" : value.Text);
+
+    public void SecretWritten(WrittenSecret written) =>
+        Success($"{written.Key.Text} {(written.WasCreated ? "criado" : "atualizado")} em {written.Bucket.Name}");
+
+    public void SecretRemoved(RemovedSecret removed) => Success($"{removed.Key} removido de {removed.Bucket.Name}");
+
+    public void BucketEncrypted(EncryptedBucket encrypted)
+    {
+        if (encrypted.WasAlreadyEncrypted)
+        {
+            Note($"{encrypted.Bucket.Name} já está encriptado");
+        }
+        else
+        {
+            Success($"{encrypted.Bucket.Name} encriptado");
+        }
+    }
+
     public void BucketCreated(BucketName bucket) =>
         SuccessWithHint($"bucket {bucket.Name} criado", $" — adicione com: sbox set {bucket.Name} <CHAVE>");
 
@@ -92,6 +124,7 @@ internal sealed class Presenter(ITerminal terminal)
         ConfirmationRequest.DeleteBucket delete => string.Create(
             CultureInfo.InvariantCulture,
             $"Apagar o bucket {delete.Bucket.Name} com {delete.KeyCount} chave(s)? [s/N] "),
+        ConfirmationRequest.RemoveSecret remove => $"Remover {remove.Key} de {remove.Bucket.Name}? [s/N] ",
         _ => throw new ArgumentOutOfRangeException(nameof(request)),
     };
 

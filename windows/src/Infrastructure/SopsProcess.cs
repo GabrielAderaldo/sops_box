@@ -5,6 +5,7 @@
 // diretório atual = cofre, porque o sops procura o `.sops.yaml` subindo a partir do arquivo.
 // Todo código de saída é conferido: falha silenciosa aqui significa secret perdido.
 
+using System.Collections.Generic;
 using System.Text;
 using Sbox.Application.Ports;
 using Sbox.Domain;
@@ -26,6 +27,23 @@ internal sealed class SopsProcess(string executable) : ISops
         Run(
             new StandardInput.Data(Encoding.UTF8.GetBytes(yaml)),
             "encrypt", "--input-type", "yaml", "--output-type", "yaml", "--filename-override", bucket.FileName);
+
+    public IReadOnlyList<Secret> Decrypt(BucketName bucket) =>
+        JsonDecoder.DecodeSecrets(
+            Run(new StandardInput.Nothing(), "decrypt", "--output-type", "json", bucket.FileName));
+
+    /// O valor vai codificado em JSON pelo stdin (`--value-stdin`); nos argumentos só o
+    /// arquivo e o caminho da chave, que não são segredo.
+    public void Set(SecretKey key, SecretValue value, BucketName bucket) =>
+        Run(
+            new StandardInput.Data(Encoding.UTF8.GetBytes(JsonEncoder.EncodeString(value.Text))),
+            "set", "--value-stdin", bucket.FileName, JsonEncoder.EncodeKeyPath(key.Text));
+
+    public void Unset(string key, BucketName bucket) =>
+        Run(new StandardInput.Nothing(), "unset", bucket.FileName, JsonEncoder.EncodeKeyPath(key));
+
+    public void EncryptInPlace(BucketName bucket) =>
+        Run(new StandardInput.Nothing(), "encrypt", "-i", bucket.FileName);
 
     /// Roda `sops <arguments>` e devolve o stdout; código ≠ 0 vira erro com o stderr do sops.
     private byte[] Run(StandardInput input, params string[] arguments)

@@ -65,22 +65,36 @@ internal sealed class Cli(IEnvironment environment, IFileSystem fileSystem, ISop
                     new DeleteBucket(store, fileSystem, new TerminalConfirmation(terminal))
                         .Execute(delete.Bucket, delete.SkipConfirmation));
                 break;
+            case Command.EncryptBucket encrypt:
+                presenter.BucketEncrypted(new EncryptBucket(store, sops).Execute(encrypt.Bucket));
+                break;
             case Command.ShowSecrets { RevealValues: false } show:
                 presenter.BucketKeys(new ShowBucket(store).Execute(show.Bucket));
                 break;
+            case Command.ShowSecrets reveal:
+                presenter.BucketSecrets(new RevealBucket(store, sops).Execute(reveal.Bucket));
+                break;
+            case Command.GetSecret { Destination: SecretDestination.StandardOutput } get:
+                presenter.SecretValueOutput(new GetSecret(store, sops).Execute(get.Bucket, get.Key));
+                break;
+            case Command.SetSecret { Source: not ValueSource.Dialog } set:
+                ISecretInput input = set.Source is ValueSource.Argument argument
+                    ? new ArgumentSecretInput(argument.Value)
+                    : new TerminalSecretInput(terminal);
+                presenter.SecretWritten(new SetSecret(store, sops).Execute(set.Bucket, set.Key, input));
+                break;
+            case Command.RemoveSecret remove:
+                presenter.SecretRemoved(
+                    new RemoveSecret(store, sops, new TerminalConfirmation(terminal))
+                        .Execute(remove.Bucket, remove.Key, remove.SkipConfirmation));
+                break;
 
-            case Command.ShowSecrets:
-                throw SboxError.NotYetImplemented("show -r");
-            case Command.EncryptBucket:
-                throw SboxError.NotYetImplemented("encrypt");
+            case Command.GetSecret:
+                throw SboxError.NotYetImplemented("get -c");
+            case Command.SetSecret:
+                throw SboxError.NotYetImplemented("set --dialog");
             case Command.EditBucket:
                 throw SboxError.NotYetImplemented("edit");
-            case Command.GetSecret:
-                throw SboxError.NotYetImplemented("get");
-            case Command.SetSecret:
-                throw SboxError.NotYetImplemented("set");
-            case Command.RemoveSecret:
-                throw SboxError.NotYetImplemented("rm");
             case Command.RunWithSecrets:
                 throw SboxError.NotYetImplemented("run");
             default:
